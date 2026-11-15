@@ -105,6 +105,7 @@
     <button class="btn" id="camBtn" title="Camera: follow whoever is speaking, or the default wide shot">Cam: follow</button>
     <button class="btn hide" id="skinBtn" title="Give yourself a Minecraft body: on = your skin, off = the normal AI body">Skin: none</button>
     <button class="btn hide" id="skinUp" title="Upload a Minecraft skin (a 64x64 PNG, like the ones from minecraft.net or skin sites)">Upload skin</button><input type="file" id="skinFile" accept="image/png" hidden>
+    <button class="btn hide" id="bodyBtn" title="Body style for every player: Default (AI bodies) or Minecraft">Bodies: Default</button>
     <button class="btn" id="fsBtn" title="Fullscreen: only the town and your typing box (Esc to leave)">Fullscreen</button>
     <button class="btn" id="t3Btn" title="Switch between the 3D town and the flat drawing">Town: 3D</button>
     <button class="btn" id="viewBtn">Log view</button>
@@ -717,7 +718,7 @@ function sceneVigilante(){
 let use3d = store.get('mafia-3d') !== 'off', t3state = null, is3d = false; // t3state: null = not tried, true = running, false = failed
 const t3api = { getSprite, colorOf, initials: p => dnText(p.name).replace(/[^A-Za-z0-9]/g, '').slice(0, 2).toUpperCase() };
 let camFollow = store.get('mafia-cam') !== 'wide';
-function camLabel(){ skinLabel(); const b = $('camBtn'); b.textContent = camFollow ? 'Cam: follow speaker' : 'Cam: wide (default)'; b.classList.toggle('hide', !(window.Town3D && t3state !== false && use3d)); if (window.Town3D) Town3D.follow = camFollow; }
+function camLabel(){ skinLabel(); bodyLabel(); const b = $('camBtn'); b.textContent = camFollow ? 'Cam: follow speaker' : 'Cam: wide (default)'; b.classList.toggle('hide', !(window.Town3D && t3state !== false && use3d)); if (window.Town3D) Town3D.follow = camFollow; }
 $('camBtn').onclick = () => { camFollow = !camFollow; store.set('mafia-cam', camFollow ? 'follow' : 'wide'); camLabel(); };
 
 function fsInfo(){ $('fsInfo').textContent = [$('phase').textContent, $('role').textContent].filter(Boolean).join('  ·  '); }
@@ -747,6 +748,22 @@ $('skinFile').onchange = async e => {
   try { const r = await fetch('/skin', { method: 'POST', body: f }), j = await r.json().catch(() => ({})); if (!r.ok) { alert(j.error || 'Could not save that skin.'); return; } } catch (err) { alert('Could not save that skin: ' + err.message); return; }
   await skinLoad();
 };
+// ---- body styles for everyone. To add a third style: add its name to BODIES here, then add a builder for it in town3d.js (see ALT_STYLES there) ----
+const BODIES = [['default', 'Default'], ['minecraft', 'Minecraft']];
+var BODY = (BODIES.find(b => b[0] === store.get('mafia-bodies')) || BODIES[0])[0]; t3api.bodies = BODY;
+var AISK = {}, aiSkinFiles = null; // AI skins found in the skins folder: normalised player name -> loaded image
+const normN = n => String(n).toLowerCase().replace(/[^a-z0-9]/g, '');
+async function aiSkinsLoad(){
+  if (location.protocol === 'file:') return;
+  try {
+    const files = await (await fetch('/skinlist')).json(); if (JSON.stringify(files) === JSON.stringify(aiSkinFiles)) return; aiSkinFiles = files;
+    AISK = {}; for (const f of files) { const im = new Image(); im.onload = () => { AISK[normN(f.replace(/\.png$/i, ''))] = im; }; im.src = '/skins/' + encodeURIComponent(f); }
+  } catch (e) {}
+}
+t3api.aiSkin = p => AISK[normN(p.name)] || null;
+function bodyLabel(){ const b = $('bodyBtn'); b.textContent = 'Bodies: ' + BODIES.find(x => x[0] === BODY)[1]; b.classList.toggle('hide', !(window.Town3D && t3state !== false && use3d)); t3api.bodies = BODY; }
+$('bodyBtn').onclick = () => { BODY = BODIES[(BODIES.findIndex(b => b[0] === BODY) + 1) % BODIES.length][0]; store.set('mafia-bodies', BODY); if (BODY !== 'default') aiSkinsLoad(); bodyLabel(); };
+if (BODY !== 'default') aiSkinsLoad();
 if (location.protocol !== 'file:') skinLoad();
 $('t3Btn').onclick = () => { use3d = !use3d; store.set('mafia-3d', use3d ? 'on' : 'off'); t3Label(); };
 t3Label();

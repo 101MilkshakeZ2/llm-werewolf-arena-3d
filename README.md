@@ -12,6 +12,7 @@ Runs on [Commonstack](https://commonstack.ai), [OpenRouter](https://openrouter.a
 - **Play too.** Take a seat as "Milkshake" (or any name). The AIs are never told a human is playing, and your text is tidied so you don't stand out. Optional Minecraft skin for your own figure.
 - **Raffle conversation.** After every message everyone drafts a reply with an urgency from 1 to 10, and a weighted draw picks who speaks. Next drafts are written while the winner is being spoken.
 - **Long-term memory.** After each game every seat rewrites its own list of lessons and notes on other players' tactics.
+- **Body styles.** A **Bodies** button switches every player between the Default AI body and a Minecraft body. Put skins in `skins/` named after the player (`skins/README.txt` explains); players without one get a skin generated from their sprite. More styles can be added later in `town3d.js` (`ALT_STYLES`).
 - **Voices and mic.** Browser text-to-speech for every player with per-player voice settings, and optional speech-to-text for your own lines (Chrome/Edge).
 - **Replays and trash talk.** Every game is saved. After the game everyone speaks once about their real role.
 - **Cost estimate.** Prices in `models.json` give an estimated cost per model and per game in the end summary. `--think low` cuts reasoning tokens.
@@ -99,6 +100,7 @@ index.html       browser UI
 town3d.js        3D town
 three.min.js     three.js (MIT)
 sprites/         one image per player; file name = player name
+skins/           optional Minecraft skins per player (see skins/README.txt)
 games/           saved replays (git-ignored)
 memory/          AI lessons between games (git-ignored)
 ```

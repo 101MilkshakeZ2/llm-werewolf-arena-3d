@@ -153,6 +153,30 @@
     root.visible = false; f.steve = root; f.sArms = arms; f.sNeck = neck; f.skinOn = false;
     f.steveDispose = () => { tex.dispose(); mat.dispose(); root.traverse(o => o.geometry && o.geometry.dispose()); };
   }
+  // A Minecraft skin made from a player's sprite and colour, for players with no skin file: classic arms, torso in their colour, the sprite as the face (front and back).
+  function genSkin(e, hex) {
+    const cv = document.createElement('canvas'); cv.width = cv.height = 64; const g = cv.getContext('2d'); g.imageSmoothingEnabled = true;
+    const c = new THREE.Color(hex), sh = k => '#' + c.clone().multiplyScalar(k).getHexString();
+    const fill = (col, x, y, w, h) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
+    fill(sh(0.6), 0, 0, 32, 16);                                                    // head: hair-coloured sides and top
+    for (const x of [8, 24]) { if (e && e.ok && e.img) g.drawImage(e.img, x, 8, 8, 8); else fill(sh(1), x, 8, 8, 8); } // face on the front and the back
+    fill(sh(1), 16, 16, 24, 16);                                                    // torso
+    fill(sh(0.82), 40, 16, 16, 16); fill(sh(0.82), 32, 48, 16, 16);                 // arms
+    fill(sh(0.42), 0, 16, 16, 16); fill(sh(0.42), 16, 48, 16, 16);                  // legs
+    return cv;
+  }
+  // Body styles besides "default". Add a third style here AND its name to BODIES in index.html. A style says what to show for a player: { key, img } (a skin) or null (the normal AI body).
+  const ALT_STYLES = {
+    minecraft: (p, h, e) => {
+      const sk = h.skin; if (p.you && sk && sk.on && sk.img) return { key: 'me:' + sk.ver, img: sk.img }; // your own uploaded skin always wins
+      const own = h.aiSkin && h.aiSkin(p); if (own) return { key: 'file:' + own.src, img: own };
+      const col = e.color || h.colorOf(p.name); return { key: 'gen:' + col + ':' + (e.ok && e.img ? e.img.src : '-'), make: () => genSkin(e, col) };
+    },
+  };
+  function bodyFor(p, h, e) { // what this player wears right now
+    const sk = h.skin; if (p.you && sk && sk.on && sk.img) return ALT_STYLES.minecraft(p, h, e); // your skin toggle works in any style
+    const st = ALT_STYLES[h.bodies]; return st ? st(p, h, e) : null;
+  }
   function setSkinMode(f, on) {
     if (!f.steve) on = false; if (f.skinOn === on) return; f.skinOn = on;
     f.ai.visible = !on; if (f.steve) f.steve.visible = on; f.arms = on ? f.sArms : f.aArms; f.neck = on ? f.sNeck : f.aNeck;
@@ -518,8 +542,8 @@
       const tex = faceTex(p, h), e = h.getSprite(p);
       setMap(f.face[0], tex); setMap(f.face[1], tex); setMap(f.soulMat, tex); setMap(f.carve, tex);
       colourFigure(f, e.color || h.colorOf(p.name));
-      const sk = h.skin, wantSkin = !!(p.you && sk && sk.on && sk.img);
-      if (wantSkin && f.skinVer !== sk.ver) { try { buildSteve(f, sk.img); f.skinVer = sk.ver; } catch (err) { console.warn('skin failed:', err); f.skinVer = sk.ver; } }
+      const wear = bodyFor(p, h, e), wantSkin = !!wear;
+      if (wear && f.skinVer !== wear.key) { f.skinVer = wear.key; try { buildSteve(f, wear.img || wear.make()); } catch (err) { console.warn('skin failed:', err); } }
       setSkinMode(f, wantSkin);
       const st = place[p.name];
       if (!st) { f.g.visible = false; p._on = false; continue; }

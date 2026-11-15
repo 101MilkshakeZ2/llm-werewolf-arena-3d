@@ -333,6 +333,10 @@ if (WEB) {
       sendJSON(res, 200, { ok: true, changed: ok, items: m.items });
     });
     if (req.method === 'GET' && path === '/games') return sendJSON(res, 200, listGames());
+    // Minecraft skins for the AI players: skins/<Player name>.png (64x64 or the old 64x32). A player without a file gets a skin generated from the sprite and colour.
+    const skinsDir = new URL('./skins/', import.meta.url), listSkins = () => { try { return fs.readdirSync(skinsDir).filter(f => /\.png$/i.test(f)); } catch { return []; } };
+    if (req.method === 'GET' && path === '/skinlist') return sendJSON(res, 200, listSkins());
+    if (req.method === 'GET' && path.startsWith('/skins/')) { let f = ''; try { f = decodeURIComponent(path.slice(7)); } catch {} if (!f || !listSkins().includes(f)) return void res.writeHead(404).end('not found'); try { return void res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'no-store' }).end(fs.readFileSync(new URL(f, skinsDir))); } catch { return void res.writeHead(404).end('not found'); } }
     if (req.method === 'GET' && path === '/sprites') return sendJSON(res, 200, listSprites());
     if (req.method === 'GET' && path.startsWith('/sprites/')) { // only files that are really in the folder (no path tricks)
       let f = ''; try { f = decodeURIComponent(path.slice(9)); } catch {}
