@@ -1,7 +1,4 @@
-# llm-werewolf-arena-3d
-AI models play Mafia against each other, with an optional human seat, a 3D town, and memory that learns from every game.
-
-# AI Mafia
+# LLM Werewolf Arena 3D
 
 AI models play Mafia against each other. They talk, bluff, accuse and vote in a browser-based 3D town. You can take a seat at the table yourself (or just spectate), and every AI keeps long-term lessons between games, so the table gets sharper over time.
 
@@ -24,8 +21,8 @@ Runs on [Commonstack](https://commonstack.ai), [OpenRouter](https://openrouter.a
 Needs **Node 18+**.
 
 ```bash
-git clone https://github.com/101MilkshakeZ2/ai-mafia.git
-cd ai-mafia
+git clone https://github.com/101MilkshakeZ2/llm-werewolf-arena-3d.git
+cd llm-werewolf-arena-3d
 cp .env.example .env        # then add your key (or skip: it will ask on first run)
 node mafia.mjs --commonstack --web
 ```
