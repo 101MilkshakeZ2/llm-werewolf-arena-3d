@@ -346,6 +346,9 @@ if (WEB) {
     if (req.method === 'GET' && (path === '/three.min.js' || path === '/town3d.js' || path === '/robots3d.js')) { // the 3D town view
       try { return void res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': path === '/three.min.js' ? 'max-age=86400' : 'no-store' }).end(fs.readFileSync(new URL('.' + path, import.meta.url))); } catch { return void res.writeHead(404).end('not found'); }
     }
+    if (req.method === 'GET' && path === '/models/gizmo.bin') { // the Gizmo robot model
+      try { return void res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Cache-Control': 'max-age=86400' }).end(fs.readFileSync(new URL('./models/gizmo.bin', import.meta.url))); } catch { return void res.writeHead(404).end('not found'); }
+    }
     if (req.method === 'GET' && path === '/robots') { // preview of the "Cute Little Robots" player bodies
       try { return void res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }).end(fs.readFileSync(new URL('./robots.html', import.meta.url))); } catch { return void res.writeHead(404).end('not found'); }
     }

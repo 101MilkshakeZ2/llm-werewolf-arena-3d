@@ -1,8 +1,10 @@
 // AI MAFIA - "Cute Little Robots" player bodies (three.js). Plain script, load after three.min.js.
-// Three designs, each built only from three.js primitives, so there is nothing to download or rig:
+// Five designs. All but Gizmo are built only from three.js primitives, so there is nothing to download or rig:
 //   screenie - a TV-head robot; the logo IS the face, on the screen front and back
 //   pip      - a round hover robot; the logo is a big round badge on the chest and on the back
 //   bolt     - a boxy little walker; the logo is on the chest plate, the backpack and a flag on the antenna
+//   gizmo    - your jointed robot (models/gizmo.bin, from an STL); round logo badges on chest, back and back of the head
+//   bitty    - the simple one: wide head with ^ ^ eyes, box body, arms and legs; logo on the body and back of the head
 // Every robot is recoloured with ONE call (setColor) and gets its logo with ONE call (setLogo).
 //
 //   const r = Robots.build('pip', { color: '#e9786f', height: 2.5 });
@@ -65,16 +67,17 @@
     const m = {
       shell: new T.MeshStandardMaterial({ roughness: 0.42, metalness: 0.08 }),            // the player colour
       shade: new T.MeshStandardMaterial({ roughness: 0.6, metalness: 0.05 }),             // a darker step of it (feet, joints)
+      shellFlat: new T.MeshStandardMaterial({ roughness: 0.5, metalness: 0.08, flatShading: true }), // the player colour on Gizmo's crisp, faceted model
       trim: new T.MeshStandardMaterial({ color: 0xf1eee6, roughness: 0.5 }),              // off-white, works with any colour
       dark: new T.MeshStandardMaterial({ color: 0x1c1f26, roughness: 0.35, metalness: 0.2 }), // screens, visors, legs
       glow: new T.MeshBasicMaterial({ color: 0xffffff }),                                 // eyes and antenna tips
       halo: new T.MeshBasicMaterial({ transparent: true, opacity: 0.35, depthWrite: false }),
-      logo: new T.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }),      // logos keep their real colours, day and night
-      logoRound: new T.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }),
+      logo: new T.MeshBasicMaterial({ color: 0xffffff, toneMapped: false, alphaTest: 0.5 }),      // logos keep their real colours, day and night
+      logoRound: new T.MeshBasicMaterial({ color: 0xffffff, toneMapped: false, alphaTest: 0.5 }), // (alphaTest: the rounded corners are see-through)
     };
     m.setColor = (hex) => {
       const c = new T.Color(hex);
-      m.shell.color.copy(c);
+      m.shell.color.copy(c); m.shellFlat.color.copy(c);
       m.shade.color.copy(c).multiplyScalar(0.55);
       m.halo.color.copy(c).lerp(new T.Color(0xffffff), 0.35);
     };
@@ -220,10 +223,104 @@
     return r;
   }
 
+
+  // ---------- design 4: Gizmo, the user's own jointed robot (models/gizmo.bin, made from a 3D-print STL) ----------
+  // The STL was 420k triangles; models/gizmo.bin is a 32k-triangle version split into body, head and two arms,
+  // so the head can turn and the arms can swing. Positions are in millimetres (112 mm tall), quantised to 16 bits.
+  // The file is loaded once and shared by every Gizmo; until it arrives the robot is simply empty.
+  const GIZMO_MM = 112;
+  const NECK = [0, 81, 0], SHOULDER = [26, 73, 0];
+  let gizmoUrl = 'models/gizmo.bin', gizmoLoad = null;
+  function loadGizmo() {
+    if (gizmoLoad) return gizmoLoad;
+    gizmoLoad = fetch(gizmoUrl).then(r => { if (!r.ok) throw new Error('gizmo model: HTTP ' + r.status); return r.arrayBuffer(); }).then(buf => {
+      const dv = new DataView(buf); if (String.fromCharCode(dv.getUint8(0), dv.getUint8(1), dv.getUint8(2), dv.getUint8(3)) !== 'GZM1') throw new Error('gizmo model: bad file');
+      const lo = [0, 1, 2].map(k => dv.getFloat32(4 + k * 4, true)), span = [0, 1, 2].map(k => dv.getFloat32(16 + k * 4, true));
+      const n = dv.getUint32(28, true); let o = 32; const geos = [];
+      const pivots = [[0, 0, 0], NECK, [-SHOULDER[0], SHOULDER[1], 0], SHOULDER]; // body, head, arm on -x, arm on +x
+      for (let gI = 0; gI < n; gI++) {
+        const nv = dv.getUint32(o, true), ni = dv.getUint32(o + 4, true); o += 8;
+        const q = new Uint16Array(buf, o, nv * 3); o += nv * 6;
+        const idx = new Uint16Array(buf.slice(o, o + ni * 2)); o += ni * 2; o = (o + 3) & ~3;
+        const pos = new Float32Array(nv * 3), pv = pivots[gI] || [0, 0, 0];
+        for (let v = 0; v < nv; v++) for (let k = 0; k < 3; k++) pos[v * 3 + k] = lo[k] + q[v * 3 + k] / 65535 * span[k] - pv[k];
+        const g = new T.BufferGeometry(); g.setAttribute('position', new T.BufferAttribute(pos, 3)); g.setIndex(new T.BufferAttribute(idx, 1)); g.computeVertexNormals();
+        geos.push(g);
+      }
+      return geos;
+    });
+    return gizmoLoad;
+  }
+  function buildGizmo(root, M) {
+    const r = {};
+    const mm = group(root, 0, 0, 0); mm.scale.setScalar(BUILT_HEIGHT / GIZMO_MM); // everything inside is in millimetres
+    const body = group(mm, 0, 0, 0); r.body = body;
+    const neck = group(body, NECK[0], NECK[1], NECK[2]); r.neck = neck;
+    r.arms = [-1, 1].map(s => group(body, s * SHOULDER[0], SHOULDER[1], 0));
+    loadGizmo().then(geos => {
+      [body, neck, r.arms[0], r.arms[1]].forEach((par, k) => { if (geos[k]) mesh(par, geos[k], M.shellFlat, 0, 0, 0); });
+    }).catch(e => console.warn(e.message));
+    // glowing eyes over the two eye rings on the face
+    r.eyes = [-1, 1].map(s => { const e = mesh(neck, new T.CircleGeometry(2.1, 20), M.glow, s * 4.7, 96.6 - NECK[1], 10.15, false); e.scale.y = 1.35; return e; });
+    // round logo badges: chest, back of the head, back of the body
+    const badge = (par, d, x, y, z, back, depth) => {
+      const puck = mesh(par, new T.CylinderGeometry(d / 2, d / 2, depth, 32), M.dark, x, y, z - (back ? -1 : 1) * depth / 2); puck.rotation.x = Math.PI / 2;
+      const rim = mesh(par, new T.TorusGeometry(d / 2, d * 0.07, 8, 32), M.trim, x, y, z); if (back) rim.rotation.y = Math.PI;
+      logoPlane(par, d * 0.92, M.logoRound, x, y, z + (back ? -0.15 : 0.15), back, true);
+    };
+    badge(body, 17, 0, 63, 9.6, false, 3.5);
+    badge(body, 12, 0, 58, -8.0, true, 1.5);
+    badge(neck, 16, 0, 94 - NECK[1], -13.4, true, 3);
+    r.update = (t, speaking, ph) => {
+      body.position.y = Math.abs(Math.sin(t * 2 + ph)) * 0.6;
+      neck.rotation.y = Math.sin(t * 0.7 + ph) * 0.25;
+      neck.rotation.z = speaking ? Math.sin(t * 9) * 0.05 : 0;
+      const blink = (Math.sin(t * 0.9 + ph * 3) > 0.985) ? 0.15 : 1;
+      for (const e of r.eyes) e.scale.y = 1.35 * (speaking ? 0.7 + Math.abs(Math.sin(t * 10)) * 0.5 : blink);
+    };
+    return r;
+  }
+
+  // ---------- design 5: Bitty, the simple one (from the sketch: wide head with ^ ^ eyes, box body, two arms, two legs) ----------
+  function buildBitty(root, M) {
+    const r = {};
+    for (const s of [-1, 1]) { // legs and flat feet
+      mesh(root, roundedBox(0.2, 0.42, 0.24, 0.04), M.shade, s * 0.17, 0.27, 0);
+      mesh(root, roundedBox(0.26, 0.08, 0.36, 0.03), M.dark, s * 0.17, 0.04, 0.05);
+    }
+    const body = group(root, 0, 0.78, 0); r.body = body;
+    mesh(body, roundedBox(0.64, 0.62, 0.42, 0.06), M.shell, 0, 0, 0);
+    logoPlane(body, 0.44, M.logo, 0, 0.02, 0.212, false);  // the big one: front of the body
+    logoPlane(body, 0.44, M.logo, 0, 0.02, -0.212, true);  // and the back
+    r.arms = [-1, 1].map(s => { // the sketch's arm: out from the top of the body, then straight down
+      const piv = group(body, s * 0.32, 0.22, 0);
+      mesh(piv, roundedBox(0.16, 0.12, 0.16, 0.03), M.shell, s * 0.07, 0, 0);
+      mesh(piv, roundedBox(0.12, 0.46, 0.14, 0.04), M.shell, s * 0.13, -0.22, 0);
+      return piv;
+    });
+    const neck = group(body, 0, 0.31, 0); r.neck = neck;
+    const head = group(neck, 0, 0.3, 0); r.head = head;
+    mesh(head, roundedBox(1.08, 0.6, 0.6, 0.08), M.shell, 0, 0, 0);
+    logoPlane(head, 0.42, M.logo, 0, 0, -0.302, true);     // back of the head: easy to spot from behind
+    r.eyes = [-1, 1].map(s => { // ^ eyes, two little bars each
+      const eye = group(head, s * 0.24, 0.06, 0.305);
+      for (const k of [-1, 1]) { const bar = mesh(eye, new T.BoxGeometry(0.15, 0.04, 0.012), M.dark, k * 0.05, 0, 0, false); bar.rotation.z = -k * 0.75; }
+      return eye;
+    });
+    r.update = (t, speaking, ph) => {
+      body.position.y = 0.78 + Math.abs(Math.sin(t * 2 + ph)) * 0.01;
+      head.position.y = 0.3 + (speaking ? Math.abs(Math.sin(t * 9)) * 0.03 : 0);
+      for (const e of r.eyes) e.position.y = 0.06 + (speaking ? Math.abs(Math.sin(t * 9)) * 0.02 : 0);
+    };
+    return r;
+  }
+
   const KINDS = {
     screenie: { label: 'Screenie', blurb: 'TV head. The logo is the face, on the screen front and back.', build: buildScreenie },
     pip: { label: 'Pip', blurb: 'Round hover bot. Big round logo badge on the chest and the back.', build: buildPip },
     bolt: { label: 'Bolt', blurb: 'Boxy walker. Logo on the chest, the backpack and a flag on the antenna.', build: buildBolt },
+    gizmo: { label: 'Gizmo', blurb: 'Your jointed robot. Round logo badges on the chest, the back and the back of the head.', build: buildGizmo },
+    bitty: { label: 'Bitty', blurb: 'The simple one. Wide head with ^ ^ eyes; the logo is on the body and the back of the head.', build: buildBitty },
   };
 
   function build(kind, opts) {
@@ -255,5 +352,7 @@
     return api;
   }
 
-  window.Robots = { KINDS, build, logoTexture, BUILT_HEIGHT };
+  // where the Gizmo model file is (relative to the page); call before the first Gizmo is built
+  const setModelBase = (base) => { gizmoUrl = base.replace(/\/?$/, '/') + 'gizmo.bin'; };
+  window.Robots = { KINDS, build, logoTexture, BUILT_HEIGHT, setModelBase, loadGizmo };
 })();
