@@ -33,6 +33,28 @@
       "Mistral": "minimax/minimax-m3"
     }
   },
+  "openrouter": {
+    "standard": {
+      "Claude-Sonnet": "~anthropic/claude-sonnet-latest",
+      "Claudia-Haiku": "~anthropic/claude-haiku-latest",
+      "Gemini-Flash": "~google/gemini-flash-latest",
+      "Gemini-Lite": "google/gemini-3.5-flash-lite",
+      "ChatGPT-Terra": "~openai/gpt-terra-latest",
+      "ChatGPT-Luna": "~openai/gpt-luna-latest",
+      "Grok": "~x-ai/grok-latest",
+      "Kimi": "~moonshotai/kimi-latest",
+      "DeepSeek": "~deepseek/deepseek-flash-latest",
+      "GLM": "~z-ai/glm-flash-latest",
+      "Qwen": "qwen/qwen3.8-flash",
+      "Muse": "meta/muse-glimmer-30b",
+      "Gemma": "google/gemma-4-31b-it",
+      "Mistral": "mistralai/mistral-small-2603"
+    },
+    "fallback": "openai/gpt-oss-120b",
+    "display": {
+      "Gemini-Flash": "Gemini 4 Hydrogen"
+    }
+  },
   "prices": {
     "moonshotai/kimi-k3.1-pro": [
       2,

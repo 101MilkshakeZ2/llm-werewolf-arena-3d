@@ -59,7 +59,9 @@ Set `COMMONSTACK_API_KEY` or `OPENROUTER_API_KEY` in your environment or in a `.
 ```
 
 - `prices` is USD per 1M tokens, `[input, output]`, used only for the cost estimate.
-- The `models.json` in this repo is a working Commonstack setup (public model slugs only, no keys). Edit it to change which model plays which seat. `models.example.json` shows the full shape for both providers, including OpenRouter, which you must fill in with real slugs.
+- The `models.json` in this repo has a working roster for both Commonstack and OpenRouter (public model slugs only, no keys). Edit it to change which model plays which seat. `models.example.json` shows the full shape.
+- The OpenRouter roster uses OpenRouter's `~provider/family-latest` aliases where they exist (for example `~anthropic/claude-sonnet-latest`), so seats move to the newest model in each family without editing anything. It has one tier, `standard`; `--tier full` falls back to it. OpenRouter reports the real cost of every call, so it needs no `prices`.
+- A provider block can also hold `"display"` (seat name → name shown in the browser, e.g. `"Gemini-Flash": "Gemini 4 Hydrogen"`) and `"fallback"` (the model a failing seat moves to; `--fallback` still wins).
 - Run `node mafia.mjs --commonstack --check` to test every slug before a game.
 - If a model fails twice in a row, its seats fall back to `openai/gpt-oss-120b` (change with `--fallback slug`, or `--fallback none`).
 

@@ -28,6 +28,7 @@ const PROVIDERS = {
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let API_KEY = '';
 let MODEL_MAP = {}; // per-AI model slugs from models.json
+let PROVIDER_DISPLAY = {}; // per-provider display-name overrides from models.json
 if (PROVIDER) {
   API_KEY = process.env[PROVIDERS[PROVIDER].keyVar] || '';
   try { // tiny .env reader
@@ -38,7 +39,13 @@ if (PROVIDER) {
   } catch {}
   try { // models.json: { "openrouter": { "standard": {"Astra": "slug", ...}, "discount": {...} }, "commonstack": {...} }
     const pc = JSON.parse(fs.readFileSync(new URL('./models.json', import.meta.url), 'utf8'))[PROVIDER] || {};
-    MODEL_MAP = (pc.standard || pc.discount) ? (pc[args.tier || 'standard'] || {}) : pc;
+    const tierOf = k => !['display', 'fallback'].includes(k);
+    if (pc.standard || pc.discount) { // tiers: --tier picks one; a provider without that tier uses its standard roster
+      if (args.tier && !pc[args.tier]) console.log(`models.json has no "${args.tier}" tier for ${PROVIDER}; using "standard".`);
+      MODEL_MAP = pc[args.tier] || pc.standard || pc.discount || {};
+    } else MODEL_MAP = Object.fromEntries(Object.entries(pc).filter(([k]) => tierOf(k)));
+    PROVIDER_DISPLAY = pc.display || {}; // optional per-provider display names, e.g. { "Gemini-Flash": "Gemini 4 Hydrogen" }
+    if (typeof pc.fallback === 'string' && args.fallback === undefined) args.fallback = pc.fallback; // optional per-provider fallback model
   } catch {}
   if (!API_KEY && !args.mock) { // no key anywhere: ask for it right now
     const kr = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -72,6 +79,7 @@ const NAMES = ['ChatGPT-Luna', 'ChatGPT-Terra', 'Claude-Sonnet', 'Claudia-Haiku'
 // In-game name (= sprite file name) -> full name shown in the browser
 const DISPLAY = { 'ChatGPT-Luna': 'ChatGPT-6 Luna', 'ChatGPT-Terra': 'ChatGPT-6.1 Terra', 'Claude-Sonnet': 'Claude Sonnet 5.5', 'Claudia-Haiku': 'Claudia Haiku 5.5', DeepSeek: 'DeepSeek 4.1', GLM: 'GLM-5.3',
   'Gemini-Flash': 'Gemini 3.8 Flash', 'Gemini-Lite': 'Gemini 3.5 Lite', Gemma: 'Gemma 4', Grok: 'Grok 4.7', Kimi: 'Kimi K3.1', Mistral: 'Mistral 4', Muse: 'Muse 1.3', Qwen: 'Qwen 3.8' };
+for (const [k, v] of Object.entries(PROVIDER_DISPLAY)) if (typeof v === 'string' && v.trim()) DISPLAY[k] = v.trim(); // models.json "display" for this provider wins
 const NAME_OK = n => /^[A-Za-z][A-Za-z0-9-]{1,19}$/.test(n);
 
 // ---------- long-term memory store, curation and therapy (self-contained so it also works from the setup screen) ----------
@@ -134,7 +142,7 @@ async function plainChat(model, system, msgs, { json = false, maxTokens = 220, t
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       if (PROVIDER) {
-        const body = { model, temperature: temp, max_tokens: Math.max(maxTokens * 3, 300), messages: m2 }; if (json) body.response_format = { type: 'json_object' }; if (/^openai\//.test(model)) body.reasoning_effort = 'minimal'; if (PROVIDER === 'openrouter') body.reasoning = { enabled: false };
+        const body = { model, temperature: temp, max_tokens: Math.max(maxTokens * 3, 300), messages: m2 }; if (json) body.response_format = { type: 'json_object' }; if (/^~?openai\//.test(model)) body.reasoning_effort = 'minimal'; if (PROVIDER === 'openrouter') body.reasoning = { enabled: false };
         const r = await fetch(process.env.MAFIA_API_URL || PROVIDERS[PROVIDER].url, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${API_KEY}` }, body: JSON.stringify(body), signal: AbortSignal.timeout(60000) });
         if (!r.ok) { const t = await r.text(); if (r.status === 400 && body.response_format) { delete body.response_format; continue; } await sleep(1000); continue; }
         const d = await r.json(); const text = (d.choices?.[0]?.message?.content || '').replace(/<think>[\s\S]*?<\/think>/g, '').trim(); if (text) return text; continue;
@@ -461,7 +469,7 @@ const NO_SYSTEM = new Set(); // models that reject the system/developer role
 let PRICES = {}; try { PRICES = JSON.parse(fs.readFileSync(new URL('./models.json', import.meta.url), 'utf8')).prices || {}; } catch {}
 // --think low: ask reasoning models to think less (cheaper and faster). Off by default. Sent in several common spellings; a model or gateway that rejects them is retried without.
 const THINK = args.think === 'low' || args.think === 'minimal' || args.think === 'off' ? String(args.think) : '';
-const thinkExtras = model => { const o = {}; if (!THINK || /^openai\//.test(model)) return o; o.reasoning_effort = THINK === 'off' ? 'minimal' : THINK; if (/glm|zai|kimi|moonshot/i.test(model)) o.thinking = { type: THINK === 'off' ? 'disabled' : 'enabled' }; if (/qwen/i.test(model)) o.enable_thinking = false; return o; };
+const thinkExtras = model => { const o = {}; if (!THINK || /^~?openai\//.test(model)) return o; o.reasoning_effort = THINK === 'off' ? 'minimal' : THINK; if (/glm|zai|kimi|moonshot/i.test(model)) o.thinking = { type: THINK === 'off' ? 'disabled' : 'enabled' }; if (/qwen/i.test(model)) o.enable_thinking = false; return o; };
 const REQUEST_TIMEOUT_MS = (+args.timeout || 68) * 1000; // --timeout 60 to allow slower models
 // OpenAI-compatible cloud call (OpenRouter / Commonstack)
 async function llmRemote(model, system, user, { json, maxTokens, temp }, stats = {}) {
@@ -471,7 +479,7 @@ async function llmRemote(model, system, user, { json, maxTokens, temp }, stats =
   if (json) body.response_format = { type: 'json_object' };
   if (PROVIDER === 'openrouter') { body.reasoning = { enabled: false }; body.usage = { include: true }; }
   const efforts = ['minimal', 'low']; // reasoning_effort values to try, in order
-  if (/^openai\//.test(model)) body.reasoning_effort = efforts.shift();
+  if (/^~?openai\//.test(model)) body.reasoning_effort = efforts.shift();
   const extras = THINK && PROVIDER !== 'openrouter' ? thinkExtras(model) : {}; Object.assign(body, extras); // --think low
   const dropExtras = () => { let had = false; for (const k of Object.keys(extras)) if (k in body) { delete body[k]; had = true; } return had; };
   for (let attempt = 0; attempt < 5; attempt++) {
