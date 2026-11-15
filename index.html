@@ -79,6 +79,11 @@
   body.logview #townWrap{display:none}
   body:not(.logview) #log{display:none}
   img.thumb{width:22px;height:22px;border-radius:4px;border:1px solid var(--line);object-fit:cover;background:#222}
+  /* ---- focus / fullscreen: only the town and the typing box ---- */
+  body.focus #top,body.focus #side,body.focus #busy{display:none}
+  #fsBar{display:none;position:fixed;top:8px;right:10px;z-index:50;align-items:center;gap:10px;background:rgba(13,17,23,.6);border:1px solid var(--line);border-radius:6px;padding:4px 8px;font-size:12px;color:var(--dim);opacity:.55;transition:opacity .15s}
+  #fsBar:hover{opacity:1}
+  body.focus #fsBar{display:flex}
   /* ---- replays ---- */
   #replays{flex:1;overflow-y:auto;padding:18px 22px}
   #replays h2{margin:0 0 10px;color:var(--acc);font-size:16px;letter-spacing:.1em}
@@ -88,6 +93,7 @@
 </style>
 </head>
 <body>
+<div id="fsBar"><span id="fsInfo"></span><button class="btn" id="fsExit" title="Leave fullscreen (Esc also works)">Exit fullscreen</button></div>
 <div id="app">
   <div id="top">
     <b>AI MAFIA</b><span id="phase"></span><span class="sp"></span><span id="role"></span>
@@ -99,7 +105,7 @@
     <button class="btn" id="camBtn" title="Camera: follow whoever is speaking, or the default wide shot">Cam: follow</button>
     <button class="btn hide" id="skinBtn" title="Give yourself a Minecraft body: on = your skin, off = the normal AI body">Skin: none</button>
     <button class="btn hide" id="skinUp" title="Upload a Minecraft skin (a 64x64 PNG, like the ones from minecraft.net or skin sites)">Upload skin</button><input type="file" id="skinFile" accept="image/png" hidden>
-    <button class="btn" id="fsBtn" title="Fullscreen on / off (Esc also leaves it)">Fullscreen</button>
+    <button class="btn" id="fsBtn" title="Fullscreen: only the town and your typing box (Esc to leave)">Fullscreen</button>
     <button class="btn" id="t3Btn" title="Switch between the 3D town and the flat drawing">Town: 3D</button>
     <button class="btn" id="viewBtn">Log view</button>
     <button class="btn" id="memBtn">Therapy &amp; Memory</button>
@@ -714,9 +720,13 @@ let camFollow = store.get('mafia-cam') !== 'wide';
 function camLabel(){ skinLabel(); const b = $('camBtn'); b.textContent = camFollow ? 'Cam: follow speaker' : 'Cam: wide (default)'; b.classList.toggle('hide', !(window.Town3D && t3state !== false && use3d)); if (window.Town3D) Town3D.follow = camFollow; }
 $('camBtn').onclick = () => { camFollow = !camFollow; store.set('mafia-cam', camFollow ? 'follow' : 'wide'); camLabel(); };
 
-function fsLabel(){ const b = $('fsBtn'); b.textContent = document.fullscreenElement ? 'Exit fullscreen' : 'Fullscreen'; }
-$('fsBtn').onclick = () => { try { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen(); } catch (e) {} };
-document.addEventListener('fullscreenchange', fsLabel);
+function fsInfo(){ $('fsInfo').textContent = [$('phase').textContent, $('role').textContent].filter(Boolean).join('  ·  '); }
+function focusOn(){ document.body.classList.add('focus'); fsInfo(); try { document.documentElement.requestFullscreen().catch(() => {}); } catch (e) {} }
+function focusOff(){ document.body.classList.remove('focus'); try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) {} }
+$('fsBtn').onclick = focusOn;
+$('fsExit').onclick = focusOff;
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) document.body.classList.remove('focus'); }); // Esc leaves fullscreen and the focus layout together
+new MutationObserver(fsInfo).observe($('top'), { childList: true, subtree: true, characterData: true });
 if (!document.documentElement.requestFullscreen) $('fsBtn').classList.add('hide');
 function t3Label(){ camLabel(); const b = $('t3Btn'); if (!window.Town3D || t3state === false) { b.textContent = 'Town: flat'; b.disabled = true; b.title = '3D is not available here (three.min.js / town3d.js missing, or no WebGL)'; } else b.textContent = use3d ? 'Town: 3D' : 'Town: flat'; }
 // ---- Minecraft skin for your own player (3D town only). skin.png + skin.json live next to the game, so clearing the browser loses nothing ----

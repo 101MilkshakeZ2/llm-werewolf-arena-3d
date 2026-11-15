@@ -477,8 +477,9 @@ async function llmRemote(model, system, user, { json, maxTokens, temp }, stats =
         if (r.status === 400 && body.reasoning && /reasoning/i.test(t)) { delete body.reasoning; continue; }
         if (r.status === 429 || r.status >= 500) {
           const why = t.replace(/\s+/g, ' ').slice(0, 140);
-          if (r.status >= 500 && attempt >= 2) { const err = new Error(`${r.status} ${why}`); err.fatal = true; throw err; } // backend is down: stop after 3 tries
-          vlog(`  ↻ ${model} returned HTTP ${r.status}${why ? ` (${why})` : ''}, waiting ${1.5 * (attempt + 1)}s and retrying`); await sleep(1500 * (attempt + 1)); continue;
+          if (r.status >= 500 && attempt >= 4) { const err = new Error(`${r.status} ${why}`); err.fatal = true; throw err; } // backend still down after 5 tries (~30s of waiting): give up, the seat may move to the fallback
+          const wait = r.status >= 500 ? 3000 * (attempt + 1) : 1500 * (attempt + 1); // server errors (500/502/503) often clear in a few seconds: wait longer before each retry
+          vlog(`  ↻ ${model} returned HTTP ${r.status}${why ? ` (${why})` : ''}, waiting ${wait / 1000}s and retrying`); await sleep(wait); continue;
         }
         const err = new Error(`${r.status} ${t.slice(0, 300)}`); err.fatal = r.status >= 400 && r.status < 500; throw err;
       }
