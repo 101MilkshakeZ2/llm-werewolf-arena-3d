@@ -27,7 +27,7 @@
       "DeepSeek": "deepseek/deepseek-flash-v4.1",
       "Kimi": "qwen/qwen3.8-27b",
       "Qwen": "qwen/qwen3.8-flash",
-      "GLM": "qwen/qwen3.8-27b",
+      "GLM": "zai-org/glm-5.3",
       "Grok": "deepseek/deepseek-flash-v4.1",
       "Muse": "minimax/minimax-m3",
       "Mistral": "minimax/minimax-m3"
