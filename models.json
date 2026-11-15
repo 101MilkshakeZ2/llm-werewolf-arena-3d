@@ -25,9 +25,9 @@
       "Gemini-Lite": "google/gemini-3.1-flash-lite-preview",
       "Gemma": "google/gemini-3.1-flash-lite-preview",
       "DeepSeek": "deepseek/deepseek-flash-v4.1",
-      "Kimi": "qwen/qwen3.8-27b",
+      "Kimi": "zai-org/glm-5.3",
       "Qwen": "qwen/qwen3.8-flash",
-      "GLM": "zai-org/glm-5.3",
+      "GLM": "qwen/qwen3.8-27b",
       "Grok": "deepseek/deepseek-flash-v4.1",
       "Muse": "minimax/minimax-m3",
       "Mistral": "minimax/minimax-m3"
