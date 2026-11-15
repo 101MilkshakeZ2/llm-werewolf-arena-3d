@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cute Little Robots - player body preview</title>
+<style>
+  :root { --bg: #0f1218; --panel: #181c24; --line: #2a303b; --text: #e8eaee; --dim: #a3abb8; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, sans-serif; display: flex; flex-direction: column; height: 100vh; }
+  header { padding: 14px 20px; display: flex; flex-wrap: wrap; gap: 14px 24px; align-items: center; border-bottom: 1px solid var(--line); background: var(--panel); }
+  h1 { margin: 0; font-size: 19px; }
+  .grp { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .grp > span { color: var(--dim); font-size: 13px; }
+  .sw { width: 30px; height: 30px; border-radius: 8px; border: 2px solid transparent; cursor: pointer; padding: 0; }
+  .sw[aria-pressed="true"] { border-color: #fff; }
+  select, button.b, input[type=text] { background: #232833; color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; font: inherit; min-height: 36px; }
+  button.b { cursor: pointer; } button.b[aria-pressed="true"] { background: #3a4252; border-color: #5b6578; }
+  input[type=color] { width: 40px; height: 36px; border: 1px solid var(--line); border-radius: 8px; background: none; padding: 2px; }
+  input[type=text] { width: 70px; }
+  main { position: relative; flex: 1; min-height: 0; }
+  canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+  .labels { position: absolute; left: 0; right: 0; bottom: 18px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); pointer-events: none; text-align: center; padding: 0 20px; gap: 20px; }
+  .labels > div { background: rgba(15,18,24,.82); border-radius: 10px; padding: 8px 12px; }
+  .labels b { display: block; font-size: 17px; } .labels small { color: #c4cad4; }
+  .hint { position: absolute; top: 12px; left: 20px; color: #e8eaee; background: rgba(15,18,24,.75); border-radius: 8px; padding: 6px 10px; font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Cute Little Robots</h1>
+  <div class="grp" id="swatches"><span>Colour</span></div>
+  <div class="grp"><label for="pick"><span style="color: var(--dim); font-size: 13px">Custom</span></label><input type="color" id="pick" value="#ff7b72"></div>
+  <div class="grp"><label for="logoSel"><span style="color: var(--dim); font-size: 13px">Logo</span></label><select id="logoSel"></select>
+    <input type="text" id="initials" value="AI" maxlength="3" aria-label="Initials when no logo image is used">
+    <label class="b" style="background:#232833;border:1px solid var(--line);border-radius:8px;padding:7px 10px;cursor:pointer">Upload<input type="file" id="upload" accept="image/*" hidden></label></div>
+  <div class="grp">
+    <button class="b" id="talkBtn" aria-pressed="false">Talk</button>
+    <button class="b" id="nightBtn" aria-pressed="false">Night</button>
+    <button class="b" id="spinBtn" aria-pressed="true">Spin</button>
+    <button class="b" id="mixBtn">Mix colours</button>
+  </div>
+</header>
+<main>
+  <canvas id="c"></canvas>
+  <div class="hint">Drag to turn them around. The logo is shown on the front and the back.</div>
+  <div class="labels" id="labels"></div>
+</main>
+<script src="three.min.js"></script>
+<script src="robots3d.js"></script>
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const COLORS = ['#79c0ff','#ff9bce','#7ee787','#e3b341','#d2a8ff','#ffa657','#56d4dd','#ff7b72','#a5d6ff','#f2cc60','#bc8cff','#9be9a8','#ffb1c1']; // same as the game
+  const IS_FILE = location.protocol === 'file:'; // WebGL can't read sprite files from file://; upload or initials still work
+  if (!window.THREE || !window.Robots) { document.body.innerHTML = '<p style="padding:20px">three.min.js or robots3d.js did not load.</p>'; return; }
+
+  const canvas = $('c');
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100);
+  camera.position.set(0, 2.3, 9.2); camera.lookAt(0, 1.15, 0);
+  const hemi = new THREE.HemisphereLight(0xdfe8ff, 0x3a3040, 1.1); scene.add(hemi);
+  const sun = new THREE.DirectionalLight(0xffffff, 2.2); sun.position.set(4, 7, 5); sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -6, right: 6, top: 6, bottom: -6 }); scene.add(sun);
+  const ground = new THREE.Mesh(new THREE.CircleGeometry(9, 64), new THREE.MeshStandardMaterial({ color: 0x9fb07f, roughness: 1 }));
+  ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+
+  const kinds = Object.keys(Robots.KINDS);
+  const robots = kinds.map((k, i) => {
+    const r = Robots.build(k, { color: '#ff7b72', height: 2.2, phase: i * 2 });
+    r.group.position.x = (i - 1) * 2.6; scene.add(r.group); return r;
+  });
+  $('labels').innerHTML = kinds.map(k => '<div><b>' + Robots.KINDS[k].label + '</b><small>' + Robots.KINDS[k].blurb + '</small></div>').join('');
+
+  // ---- colour ----
+  let mixed = false;
+  function setColor(hex) { mixed = false; robots.forEach(r => r.setColor(hex)); $('pick').value = hex; markSwatch(hex); }
+  function markSwatch(hex) { document.querySelectorAll('.sw').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.c === hex))); }
+  COLORS.forEach(c => {
+    const b = document.createElement('button'); b.className = 'sw'; b.style.background = c; b.dataset.c = c; b.setAttribute('aria-label', 'Colour ' + c); b.setAttribute('aria-pressed', 'false');
+    b.onclick = () => setColor(c); $('swatches').appendChild(b);
+  });
+  $('pick').oninput = e => setColor(e.target.value);
+  $('mixBtn').onclick = () => { mixed = true; markSwatch(''); robots.forEach(r => r.setColor(COLORS[Math.floor(Math.random() * COLORS.length)])); };
+  setColor('#ff7b72');
+
+  // ---- logo ----
+  const sel = $('logoSel');
+  const addOpt = (v, t) => { const o = document.createElement('option'); o.value = v; o.textContent = t; sel.appendChild(o); };
+  addOpt('', 'Initials');
+  function useLogo(src) { robots.forEach(r => r.setLogoSource(src)); }
+  function loadImg(url) { return new Promise((ok, no) => { const im = new Image(); im.onload = () => ok(im); im.onerror = no; im.src = url; }); }
+  function applySel() {
+    if (!sel.value) return useLogo($('initials').value || '?');
+    loadImg(sel.value).then(useLogo).catch(() => useLogo($('initials').value || '?'));
+  }
+  sel.onchange = applySel; $('initials').oninput = () => { if (!sel.value) applySel(); };
+  $('upload').onchange = e => {
+    const f = e.target.files[0]; if (!f) return;
+    const rd = new FileReader(); rd.onload = () => { addOpt(rd.result, f.name); sel.value = rd.result; applySel(); }; rd.readAsDataURL(f);
+  };
+  if (!IS_FILE) {
+    fetch('/sprites').then(r => r.ok ? r.json() : []).then(list => {
+      (list || []).forEach(f => addOpt('/sprites/' + encodeURIComponent(f), f.replace(/\.[a-z]+$/i, '')));
+      const pref = (list || []).find(f => /^Claude/i.test(f)) || (list || [])[0];
+      if (pref) { sel.value = '/sprites/' + encodeURIComponent(pref); applySel(); }
+    }).catch(() => {});
+  }
+  applySel();
+
+  // ---- toggles ----
+  const toggle = (id, on) => { const b = $(id); const v = on != null ? on : b.getAttribute('aria-pressed') !== 'true'; b.setAttribute('aria-pressed', String(v)); return v; };
+  let talking = false, night = false, spin = true;
+  $('talkBtn').onclick = () => { talking = toggle('talkBtn'); };
+  $('spinBtn').onclick = () => { spin = toggle('spinBtn'); };
+  $('nightBtn').onclick = () => {
+    night = toggle('nightBtn');
+    scene.background = new THREE.Color(night ? 0x0b1020 : 0x9cc8ef);
+    hemi.intensity = night ? 0.18 : 1.1; sun.intensity = night ? 0.25 : 2.2; sun.color.set(night ? 0x8fa6ff : 0xffffff);
+    ground.material.color.set(night ? 0x2d3a2a : 0x9fb07f);
+  };
+  scene.background = new THREE.Color(0x9cc8ef);
+
+  // ---- drag to turn ----
+  let yaw = 0, drag = null;
+  canvas.addEventListener('pointerdown', e => { drag = { x: e.clientX, yaw }; canvas.setPointerCapture(e.pointerId); });
+  canvas.addEventListener('pointermove', e => { if (drag) yaw = drag.yaw + (e.clientX - drag.x) * 0.01; });
+  canvas.addEventListener('pointerup', () => { drag = null; });
+
+  function resize() {
+    const w = canvas.clientWidth, h = canvas.clientHeight; if (!w || !h) return;
+    renderer.setSize(w, h, false); camera.aspect = w / h;
+    camera.fov = w / h < 1.2 ? 48 : 32; // narrow windows: pull back so all three fit
+    camera.updateProjectionMatrix();
+  }
+  addEventListener('resize', resize); resize();
+
+  const clock = new THREE.Clock();
+  window.__robots = { robots, scene, renderer, camera, setYaw: v => { yaw = v; spin = false; toggle('spinBtn', false); }, setColor, render: () => renderer.render(scene, camera) };
+  renderer.setAnimationLoop(() => {
+    const dt = clock.getDelta(), t = clock.elapsedTime;
+    if (spin && !drag) yaw += dt * 0.5;
+    robots.forEach((r, i) => {
+      r.group.rotation.y = yaw;
+      r.update(t, talking);
+      // a little wave so the arm pivots are visible
+      const w = Math.sin(t * 2 + i) * 0.15;
+      r.arms[0].rotation.x = w; r.arms[1].rotation.x = -w;
+    });
+    renderer.render(scene, camera);
+  });
+})();
+</script>
+</body>
+</html>

@@ -343,8 +343,11 @@ if (WEB) {
       if (!f || !listSprites().includes(f)) return void res.writeHead(404).end('not found');
       try { return void res.writeHead(200, { 'Content-Type': SPRITE_MIME[f.split('.').pop().toLowerCase()] || 'application/octet-stream', 'Cache-Control': 'no-store' }).end(fs.readFileSync(new URL(f, spritesDir))); } catch { return void res.writeHead(404).end('not found'); }
     }
-    if (req.method === 'GET' && (path === '/three.min.js' || path === '/town3d.js')) { // the 3D town view
-      try { return void res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': path === '/town3d.js' ? 'no-store' : 'max-age=86400' }).end(fs.readFileSync(new URL('.' + path, import.meta.url))); } catch { return void res.writeHead(404).end('not found'); }
+    if (req.method === 'GET' && (path === '/three.min.js' || path === '/town3d.js' || path === '/robots3d.js')) { // the 3D town view
+      try { return void res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': path === '/three.min.js' ? 'max-age=86400' : 'no-store' }).end(fs.readFileSync(new URL('.' + path, import.meta.url))); } catch { return void res.writeHead(404).end('not found'); }
+    }
+    if (req.method === 'GET' && path === '/robots') { // preview of the "Cute Little Robots" player bodies
+      try { return void res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }).end(fs.readFileSync(new URL('./robots.html', import.meta.url))); } catch { return void res.writeHead(404).end('not found'); }
     }
     const gm = path.match(/^\/games\/(game-\d+\.json)$/);
     if (req.method === 'GET' && gm) { try { return void res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' }).end(fs.readFileSync(new URL(gm[1], gamesDir))); } catch { return void res.writeHead(404).end('not found'); } }
