@@ -1,0 +1,19 @@
+{
+  "openrouter": {
+    "standard": {
+      "Gemini-Flash": "google/model-slug", "ChatGPT-Luna": "openai/model-slug", "Gemini-Lite": "google/model-slug", "Gemma": "google/model-slug",
+      "Claude-Sonnet": "anthropic/model-slug", "ChatGPT-Terra": "anthropic/model-slug", "Claudia-Haiku": "anthropic/model-slug", "Grok": "x-ai/model-slug",
+      "Kimi": "moonshotai/model-slug", "DeepSeek": "deepseek/model-slug", "Qwen": "qwen/model-slug", "Mistral": "mistralai/model-slug", "GLM": "z-ai/model-slug"
+    },
+    "discount": {
+      "Gemini-Flash": "cheaper/model-slug", "ChatGPT-Luna": "cheaper/model-slug", "Gemini-Lite": "cheaper/model-slug", "Gemma": "cheaper/model-slug",
+      "Claude-Sonnet": "cheaper/model-slug", "ChatGPT-Terra": "cheaper/model-slug", "Claudia-Haiku": "cheaper/model-slug", "Grok": "cheaper/model-slug",
+      "Kimi": "cheaper/model-slug", "DeepSeek": "cheaper/model-slug", "Qwen": "cheaper/model-slug", "Mistral": "cheaper/model-slug", "GLM": "cheaper/model-slug"
+    }
+  },
+  "commonstack": {
+    "Gemini-Flash": "model-id-from-commonstack-library", "ChatGPT-Luna": "model-id", "Gemini-Lite": "model-id", "Gemma": "model-id",
+    "Claude-Sonnet": "model-id", "ChatGPT-Terra": "model-id", "Claudia-Haiku": "model-id", "Grok": "model-id",
+    "Kimi": "model-id", "DeepSeek": "model-id", "Qwen": "model-id", "Mistral": "model-id", "GLM": "model-id"
+  }
+}

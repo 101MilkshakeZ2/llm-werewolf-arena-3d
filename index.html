@@ -1,0 +1,978 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI Mafia</title>
+<style>
+  :root{--bg:#0b0d10;--panel:#11151a;--line:#1e252d;--fg:#d6dde4;--dim:#6b7783;--acc:#7ee787;--red:#ff7b72;--yel:#e3b341;--cyan:#79c0ff}
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font:14px/1.55 ui-monospace,"Cascadia Mono",Consolas,Menlo,monospace}
+  button,input,select{font:inherit}
+  .btn.rec{background:#7a1f1a;border-color:#ff6b61;color:#fff;animation:recp 1s infinite}@keyframes recp{50%{box-shadow:0 0 0 4px rgba(255,107,97,.35)}}
+  .btn{background:#0d1117;color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:4px 10px;cursor:pointer}
+  .btn:hover{border-color:var(--acc);color:var(--acc)}
+  .btn.go{background:var(--acc);color:#04210a;border:0;font-weight:700;padding:8px 18px}
+  .btn.go:hover{color:#04210a;filter:brightness(1.1)}
+  .hide{display:none!important}
+  #app{display:flex;flex-direction:column;height:100%;max-width:1180px;margin:0 auto;border-left:1px solid var(--line);border-right:1px solid var(--line)}
+  #top{display:flex;gap:12px;align-items:center;padding:8px 14px;border-bottom:1px solid var(--line);background:var(--panel);color:var(--dim);flex-wrap:wrap}
+  #top b{color:var(--acc);letter-spacing:.08em}
+  #top .sp{flex:1}
+  #phase{color:var(--yel)} #role{color:var(--cyan)}
+  #top label{cursor:pointer;user-select:none}
+  /* ---- setup screen ---- */
+  #lobby{flex:1;overflow-y:auto;padding:18px 22px}
+  #lobby h2{margin:0 0 4px;color:var(--acc);font-size:16px;letter-spacing:.1em}
+  #lobby .sub{color:var(--dim);margin-bottom:16px}
+  fieldset{border:1px solid var(--line);border-radius:8px;margin:0 0 14px;padding:10px 14px 12px}
+  legend{color:var(--yel);padding:0 6px}
+  .rowf{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:4px 0}
+  .rowf .note{color:var(--dim)}
+  #lobby input[type=text],#lobby input[type=number],#lobby select{background:#0d1117;color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:4px 8px;outline:none}
+  #lobby input:focus,#lobby select:focus{border-color:var(--acc)}
+  #lobby input[type=checkbox],#lobby input[type=radio]{accent-color:var(--acc)}
+  #cast{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:4px 14px;margin-top:8px}
+  .seat{display:flex;gap:8px;align-items:center}
+  .seat label{width:92px;cursor:pointer;font-weight:700}
+  .seat select{flex:1;min-width:0;color:var(--dim)}
+  #count{color:var(--acc)} #count.bad{color:var(--red)}
+  #err{color:var(--red);min-height:22px;margin:6px 0}
+  /* ---- game ---- */
+  #main{flex:1;display:flex;min-height:0}
+  #log{flex:1;overflow-y:auto;padding:12px 16px;min-width:0}
+  #side{width:230px;border-left:1px solid var(--line);background:var(--panel);overflow-y:auto;padding:10px 12px}
+  #side h3{margin:0 0 8px;font-size:12px;color:var(--dim);letter-spacing:.15em;font-weight:400}
+  .pl{display:flex;flex-direction:column;padding:4px 0;border-bottom:1px dashed var(--line)}
+  .pl .n{font-weight:700}
+  .pl.dead .n{text-decoration:line-through;opacity:.45}
+  .pl .tag{font-size:11px;color:var(--dim)}
+  .pl .tag.Mafia{color:var(--red)} .pl .tag.you{color:var(--acc)}
+  @media (max-width:760px){#side{display:none}}
+  .row{padding:1px 0;white-space:pre-wrap;word-break:break-word}
+  .row.dim,.row .dim{color:var(--dim)} .row.red,.row .red{color:var(--red)} .row.yel,.row .yel{color:var(--yel)} .row.cyan,.row .cyan{color:var(--cyan)}
+  .row .bold{font-weight:700}
+  .msg .who{font-weight:700} .msg .t{color:var(--fg)}
+  .ms{color:var(--dim);font-size:11px;margin-left:8px}
+  .me .t{color:var(--acc)}
+  .day{margin:18px 0 8px;padding:6px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);color:var(--yel);text-align:center;letter-spacing:.2em;font-weight:700}
+  .day.night{color:var(--cyan)} .day.win{color:var(--acc)} .day.win.mafia{color:var(--red)}
+  .notes{color:#8b7fb8;font-style:italic}
+  body.nonotes .notes{display:none}
+  .gap{height:6px}
+  #dock{border-top:1px solid var(--line);background:var(--panel);padding:10px 14px 12px}
+  #hint{min-height:20px;color:var(--dim);margin-bottom:6px}
+  .live #hint{color:var(--yel)}
+  .live #hint::before{content:"● ";color:var(--acc)}
+  #opts{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+  #inrow{display:flex;gap:8px;align-items:center}
+  #inrow .pr{color:var(--acc)}
+  #txt{flex:1;background:#0d1117;color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;outline:none}
+  #txt:focus{border-color:var(--acc)}
+  #urg{display:flex;align-items:center;gap:10px;margin-top:10px;color:var(--dim)}
+  #urg input{flex:1;accent-color:var(--acc)}
+  #tone{min-width:150px;color:var(--fg)}
+  #watch{border-top:1px solid var(--line);background:var(--panel);padding:8px 14px;color:var(--dim);display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  #busy{color:var(--dim);min-height:20px;padding:0 16px 4px}
+  #townWrap{flex:1;position:relative;min-width:0;background:#000}
+  #town{position:absolute;inset:0;width:100%;height:100%;display:block}
+  body.logview #townWrap{display:none}
+  body:not(.logview) #log{display:none}
+  img.thumb{width:22px;height:22px;border-radius:4px;border:1px solid var(--line);object-fit:cover;background:#222}
+  /* ---- replays ---- */
+  #replays{flex:1;overflow-y:auto;padding:18px 22px}
+  #replays h2{margin:0 0 10px;color:var(--acc);font-size:16px;letter-spacing:.1em}
+  .gm{display:flex;gap:14px;padding:6px 8px;border-bottom:1px dashed var(--line);cursor:pointer}
+  .gm:hover{background:var(--panel)}
+  .gm .w{width:110px} .gm .w.MAFIA{color:var(--red)} .gm .w.TOWN{color:var(--acc)} .gm .w.JESTER{color:#ffb454}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="top">
+    <b>AI MAFIA</b><span id="phase"></span><span class="sp"></span><span id="role"></span>
+    <label id="notesL" class="hide"><input type="checkbox" id="notesT" checked> AI notes</label>
+    <button class="btn hide" id="newBtn">New game</button>
+    <button class="btn hide" id="skipBtn" title="Stop the post game discussion and move on">Skip trash talk</button>
+    <button class="btn" id="voiceBtn" title="Read messages aloud (browser voices)">Voices: off</button>
+    <button class="btn" id="vcfgBtn" title="Choose the voice, pitch and speed of every player (and yours)">Voice settings</button>
+    <button class="btn" id="camBtn" title="Camera: follow whoever is speaking, or the default wide shot">Cam: follow</button>
+    <button class="btn hide" id="skinBtn" title="Give yourself a Minecraft body: on = your skin, off = the normal AI body">Skin: none</button>
+    <button class="btn hide" id="skinUp" title="Upload a Minecraft skin (a 64x64 PNG, like the ones from minecraft.net or skin sites)">Upload skin</button><input type="file" id="skinFile" accept="image/png" hidden>
+    <button class="btn" id="t3Btn" title="Switch between the 3D town and the flat drawing">Town: 3D</button>
+    <button class="btn" id="viewBtn">Log view</button>
+    <button class="btn" id="memBtn">Therapy &amp; Memory</button>
+    <button class="btn" id="repBtn">Replays</button>
+    <span id="conn">connecting…</span>
+  </div>
+
+  <!-- setup screen -->
+  <div id="lobby" class="hide">
+    <h2>NEW GAME</h2>
+    <div class="sub">Models from: <span id="prov"></span>. Your choices are remembered for next time.</div>
+    <fieldset><legend>You</legend>
+      <div class="rowf"><label><input type="radio" name="seat" value="play" checked> Take a seat</label> as <input type="text" id="myName" size="12" maxlength="20" value="Milkshake"><img id="myThumb" class="thumb" alt="">
+        <label><input type="radio" name="seat" value="watch"> Just watch (AI-only game, all roles visible)</label></div>
+      <div class="rowf"><label><input type="checkbox" id="disguise" checked> Disguise me</label><span class="note">the AIs are never told a human is playing, and they read your text tidied up</span></div>
+    </fieldset>
+    <fieldset><legend>Who plays</legend>
+      <div class="rowf"><span>AI players: <b id="count">0</b></span>
+        <button class="btn" id="rndBtn">random</button><input type="number" id="rndN" min="6" max="15" value="6" style="width:64px">
+        <button class="btn" id="allBtn">all</button><button class="btn" id="noneBtn">none</button>
+        <span class="note">7 to 15 players in total. The model column is optional: "auto" rotates the models below across the seats.</span></div>
+      <div id="cast"></div>
+      <div class="rowf" style="margin-top:10px"><span>Models in rotation</span><input type="text" id="models" style="flex:1;min-width:260px" spellcheck="false"><button class="btn" id="defModels">default</button><span class="note">comma separated</span></div>
+    </fieldset>
+    <fieldset><legend>Roles</legend>
+      <div class="rowf"><span>Mafia:</span>
+        <label><input type="radio" name="mafia" value="0" checked> auto</label><label><input type="radio" name="mafia" value="2"> 2</label><label><input type="radio" name="mafia" value="3"> 3</label>
+        <label><input type="checkbox" checked disabled> Doctor</label><label><input type="checkbox" checked disabled> Sheriff</label>
+        <label><input type="checkbox" id="vig" checked> Vigilante</label> <label><select id="vigStyle" title="how willing the AI Vigilante is to shoot"><option value="bold">bold shooter</option><option value="cautious">cautious (old)</option></select></label> <label><input type="checkbox" id="jester" checked> Jester</label></div>
+      <div class="rowf" id="roleRow"><span>My role:</span><select id="myRole"><option value="random">random</option><option>Mafia</option><option>Doctor</option><option>Sheriff</option><option>Vigilante</option><option>Jester</option><option>Villager</option></select><span class="note">only when you take a seat; everyone else is dealt randomly</span></div>
+      <div id="mafWarn" class="note" style="color:#ff8a80;margin-top:4px"></div>
+    </fieldset>
+    <fieldset><legend>Talking</legend>
+      <div class="rowf"><span>Discussion length</span><input type="number" id="disc" min="0.5" max="4" step="0.25" value="1.75" style="width:74px"><span class="note" id="discNote"></span></div>
+      <div class="rowf"><span>Who speaks next</span><select id="urgency">
+        <option value="light">light: random, fastest and cheapest</option>
+        <option value="balanced">balanced: about 5 players rate their urgency</option>
+        <option value="full">full: everyone rates every time (slowest)</option></select></div>
+      <div class="rowf"><label><input type="checkbox" id="memory"> AI private notes</label><span class="note">each AI keeps its own memory between days (one extra call per AI per day)</span></div>
+      <div class="rowf"><label><input type="checkbox" id="learn"> Long-term memory</label><span class="note">each seat remembers lessons and other players' tactics from game to game (saved in the memory folder; one extra call per AI after each game)</span></div>
+      <div class="rowf"><label><input type="checkbox" id="postgame" checked> Post-game discussion (trash talk)</label> <label><input type="checkbox" id="hideNight"> Hide night activity</label><span class="note">off = you can see who is "thinking" at night, which gives roles away</span></div>
+    </fieldset>
+    <div id="err"></div>
+    <button class="btn go" id="startBtn">START GAME</button>
+  </div>
+
+  <!-- replay list -->
+  <div id="memScreen" class="hide">
+    <h2>MEMORY &amp; THERAPY</h2>
+    <div class="rowf" style="margin-bottom:10px"><button class="btn" id="memBack">← back</button><span class="note" id="memNote"></span></div>
+    <div id="memWrap" style="display:flex;gap:16px;flex-wrap:wrap">
+      <div id="memSeats" style="min-width:170px;max-width:210px"></div>
+      <div id="memMain" style="flex:1;min-width:320px">
+        <canvas id="thStage" width="720" height="340" style="width:100%;max-width:720px;border:1px solid var(--line);border-radius:8px;background:#050505;display:block"></canvas>
+        <div class="rowf" style="margin-top:8px;max-width:720px"><input type="text" id="thTxt" style="flex:1" placeholder="Say something to this player…"><button class="btn" id="thSend">Send</button><button class="btn" id="thEnd">End session &amp; let them remember</button></div>
+        <div class="note" id="thNote" style="margin-top:4px"></div>
+        <div id="thLog" style="margin:8px 0;max-height:150px;overflow:auto;max-width:720px"></div>
+        <h3 id="memTitle" style="margin:14px 0 6px"></h3>
+        <div id="memItems"></div>
+        <div id="memOthers" style="margin-top:8px;color:var(--dim);font-size:13px"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="replays" class="hide">
+    <h2>REPLAYS</h2>
+    <div class="rowf" style="margin-bottom:12px"><button class="btn" id="backBtn">← back</button><span class="note">or open a saved game file:</span><input type="file" id="file" accept=".json,application/json"></div>
+    <div id="games"></div>
+  </div>
+
+  <!-- game / replay view -->
+  <div id="main" class="hide">
+    <div id="townWrap"><canvas id="town"></canvas></div>
+    <div id="log"></div>
+    <div id="side"><h3>PLAYERS</h3><div id="roster"></div></div>
+  </div>
+  <div id="busy" class="hide"></div>
+  <div id="watch" class="hide"></div>
+  <div id="dock" class="hide">
+    <div id="hint"></div>
+    <div id="opts"></div>
+    <div id="inrow"><span class="pr">&gt;</span><button class="btn hide" id="qBtn" title="Messages you typed that have not been said yet. Click to throw them away."></button><input id="txt" autocomplete="off" placeholder="type a message, Enter to send. To vote with a reason: Name: reason"><button class="btn" id="micBtn" title="Speak your message (microphone)">🎤</button><button class="btn go" id="send">Send</button></div>
+    <div id="micNote" class="note hide" style="padding:2px 16px"></div>
+    <div id="urg"><span>urgency</span><input id="slider" type="range" min="0" max="10" step="1" value="5"><span id="tone">5 · normal</span></div>
+  </div>
+</div>
+<div id="vcfg" class="hide" style="position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.65);overflow:auto">
+  <div style="max-width:980px;margin:30px auto;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px">
+    <div class="rowf" style="margin-bottom:6px"><b style="font-size:16px">VOICE SETTINGS</b><span class="sp" style="flex:1"></span><button class="btn" id="vcClose">close</button></div>
+    <div class="note" id="vcNote" style="margin-bottom:8px"></div>
+    <div class="rowf" style="margin-bottom:10px"><button class="btn" id="vcAll">▶ hear everyone</button><button class="btn" id="vcShuffle">shuffle voices</button><button class="btn" id="vcReset">reset all to default</button><button class="btn" id="vcCopy">copy English voice list</button><label><input type="checkbox" id="vcEn" checked> English voices only</label><label><input type="checkbox" id="vcOn"> read messages aloud</label></div>
+    <div class="rowf" style="margin-bottom:8px"><b>Microphone</b><label>language <select id="micLang"></select></label><label><input type="checkbox" id="micSend"> send automatically when I stop talking</label><span class="note">Chrome / Edge. Click 🎤 next to the message box, speak, and it is sent as your next line (the others are paused while you talk, so use headphones if it hears them).</span></div>
+    <div id="vcRows"></div>
+  </div>
+</div>
+<script src="three.min.js" onerror="void 0"></script>
+<script src="town3d.js" onerror="void 0"></script>
+<script>
+const $ = id => document.getElementById(id);
+const log = $('log'), txt = $('txt'), slider = $('slider');
+const TONES = ['0 · muted, stay quiet','1 · chill','2 · chill','3 · calm','4 · calm','5 · normal','6 · keen','7 · keen','8 · pushy','9 · pushy','10 · NOW!'];
+const COLORS = ['#79c0ff','#ff9bce','#7ee787','#e3b341','#d2a8ff','#ffa657','#56d4dd','#ff7b72','#a5d6ff','#f2cc60','#bc8cff','#9be9a8','#ffb1c1'];
+const colorOf = n => { let h = 0; for (const c of n) h = (h * 31 + c.charCodeAt(0)) >>> 0; return COLORS[h % COLORS.length]; };
+const dn = n => DISP[n] || n;
+const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const store = { get(k){ try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }, set(k,v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
+
+let talking = false, DISP = {}, me = null, meAlive = false, known = new Set(), view = 'none', mode = 'live', info = null, gameOver = false, prompting = false;
+let lastMsg = null, pendingTime = null, es = null, replayTimer = null;
+
+function show(v){ // lobby | game | replays
+  view = v;
+  $('lobby').classList.toggle('hide', v !== 'lobby');
+  $('replays').classList.toggle('hide', v !== 'replays');
+  $('memScreen').classList.toggle('hide', v !== 'memory');
+  $('main').classList.toggle('hide', v !== 'game');
+  $('busy').classList.toggle('hide', v !== 'game' || mode !== 'live');
+  layoutDock();
+}
+$('skipBtn').onclick = () => { $('skipBtn').classList.add('hide'); fetch('/skip-talk', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).catch(() => {}); };
+function layoutDock(){
+  const playing = view === 'game' && mode === 'live' && me && (meAlive || talking) && !gameOver;
+  $('dock').classList.toggle('hide', !playing);
+  const w = $('watch'); let t = '';
+  if (view === 'game' && mode === 'live' && !playing) t = gameOver ? 'Game over.' : me ? 'You are out of the game. You now see everything.' : 'Spectating: all roles and night actions are visible.';
+  if (view === 'game' && mode === 'replay') t = '';
+  w.classList.toggle('hide', !(view === 'game' && (mode === 'replay' || t)));
+  if (mode !== 'replay') w.textContent = t;
+  $('newBtn').classList.toggle('hide', !(gameOver && mode === 'live'));
+  $('skipBtn').classList.toggle('hide', !(talking && mode === 'live' && !gameOver));
+}
+
+// ---------- log rendering (shared by live games and replays) ----------
+function ansi(s){
+  let cls = new Set(), out = '', plain = '';
+  const re = /\x1b\[([0-9;]*)m/g; let last = 0, m;
+  const push = t => { if (!t) return; plain += t; out += cls.size ? `<span class="${[...cls].join(' ')}">${esc(t)}</span>` : esc(t); };
+  while ((m = re.exec(s))) { push(s.slice(last, m.index)); last = re.lastIndex;
+    for (const c of m[1].split(';')) { if (c==='0'||c==='') cls.clear(); else if (c==='1') cls.add('bold'); else if (c==='2') cls.add('dim'); else if (c==='31') cls.add('red'); else if (c==='33') cls.add('yel'); else if (c==='36') cls.add('cyan'); } }
+  push(s.slice(last));
+  const first = s.match(/^\x1b\[([0-9;]*)m/); const flags = first ? first[1].split(';') : [];
+  return { html: out, plain, flags };
+}
+function clearLog(){ if (typeof townReset === 'function') townReset(); log.innerHTML = ''; lastMsg = null; pendingTime = null; $('phase').textContent = ''; $('role').textContent = ''; }
+function atBottom(){ return log.scrollHeight - log.scrollTop - log.clientHeight < 80; }
+function addLine(raw, kind){
+  const stick = atBottom();
+  for (const line of String(raw).split('\n')) renderOne(line, kind);
+  if (stick) log.scrollTop = log.scrollHeight;
+}
+function stamp(el, who){ if (pendingTime && pendingTime.who === who) { const s = document.createElement('span'); s.className = 'ms'; s.textContent = pendingTime.s + 's'; el.append(s); } pendingTime = null; }
+const NOT_NAMES = /^(Models|Players|Options|Roles|Tokens|Cost|Browser UI|Transcript)$/;
+function renderOne(line, kind){
+  const a = ansi(line), t = a.plain;
+  let m;
+  townFeed(t);
+  if (!t.trim()) { if (log.lastChild && log.lastChild.className !== 'gap') { const d = document.createElement('div'); d.className='gap'; log.append(d); } return; }
+  if ((m = t.match(/^\s*⏱\s+(\S+)\s+([\d.]+)s/))) { pendingTime = { who: m[1], s: m[2] }; return; } // shown small beside that player's next line
+  if ((m = t.match(/^=+\s*(DAY \d+|NIGHT \d+|MORNING \d+|[\w-]+ WINS|POST GAME [A-Z ]+)\s*=+$/))) {
+    $('phase').textContent = m[1]; const d = document.createElement('div'); d.className = 'day' + (/NIGHT/.test(m[1]) ? ' night' : /MAFIA WINS/.test(m[1]) ? ' win mafia' : /WINS/.test(m[1]) ? ' win' : /POST GAME/.test(m[1]) ? ' win' : ''); d.textContent = m[1]; log.append(d); lastMsg = null; return; }
+  if ((m = t.match(/You are (\w+), role: ([^.]+)/))) $('role').textContent = 'you: ' + m[2].trim();
+  if (/^\s*\((sent as your message|You can type at any time|answered in the browser)/.test(t)) return;
+  const d = document.createElement('div'); d.className = 'row';
+  const isName = n => known.size ? known.has(n) : !NOT_NAMES.test(n);
+  if (kind === 'notes') { d.className = 'row notes'; d.textContent = t; }
+  else if ((m = t.match(/^(\[Mafia\] )?([A-Z][A-Za-z0-9-]+): (.+)$/)) && isName(m[2])) {
+    d.className = 'row msg' + (m[2] === me ? ' me' : '');
+    const w = document.createElement('span'); w.className='who'; w.style.color = m[1] ? 'var(--red)' : colorOf(m[2]); w.textContent = (m[1]||'') + dn(m[2]) + ': ';
+    const x = document.createElement('span'); x.className='t'; x.textContent = m[3]; if (m[1]) x.style.color = '#ffb3ad';
+    d.append(w, x); stamp(d, m[2]); lastMsg = d; say(m[2], m[3], !!m[1]);
+  } else if ((m = t.match(/^([\w-]+) votes ([\w-]+)(.*)$/))) {
+    const w = document.createElement('span'); w.className='bold'; w.style.color = colorOf(m[1]); w.textContent = dn(m[1]);
+    const v = document.createElement('span'); v.className='bold'; v.style.color = m[2] === 'SKIP' ? 'var(--dim)' : colorOf(m[2]); v.textContent = m[2] === 'SKIP' ? m[2] : dn(m[2]);
+    const r = document.createElement('span'); r.className='dim'; r.textContent = m[3];
+    d.append(w, ' votes ', v, r); stamp(d, m[1]);
+  }
+  else { d.innerHTML = a.html; for (const id of Object.keys(DISP).sort((x, y) => y.length - x.length)) d.innerHTML = d.innerHTML.split(id).join(esc(DISP[id])); if (a.flags.includes('2') || kind === 'private') d.classList.add('dim'); if (kind === 'mafia') d.classList.add('red'); }
+  log.append(d);
+  if (mode === 'replay') { if ((m = t.match(/^([\w-]+) died\.$/)) || (m = t.match(/^([\w-]+) is executed/))) { const p = (info?.players || []).find(q => q.name === m[1]); if (p) { p.alive = false; drawRoster(info.players); } } }
+}
+function drawRoster(players){
+  townRoster(players);
+  const r = $('roster'); r.innerHTML = '';
+  for (const p of players) {
+    const d = document.createElement('div'); d.className = 'pl' + (p.alive ? '' : ' dead');
+    const n = document.createElement('span'); n.className = 'n'; n.style.color = colorOf(p.name); n.textContent = dn(p.name) + (p.alive ? '' : ' ✝');
+    d.append(n);
+    const tags = [];
+    if (p.you) tags.push(['you', 'you']);
+    if (p.role) tags.push([p.role, p.role]); else if (p.revealed) tags.push([p.revealed, p.revealed === 'Mafia' ? 'Mafia' : '']);
+    if (p.model) tags.push([p.model, '']);
+    if (tags.length) { const t = document.createElement('span'); t.className = 'tag'; for (const [text, cls] of tags) { const s = document.createElement('span'); s.className = cls; s.textContent = text; if (t.childNodes.length) t.append(' · '); t.append(s); } d.append(t); }
+    r.append(d);
+  }
+}
+
+// ---------- setup screen ----------
+function buildLobby(h){
+  $('prov').textContent = h.provider;
+  const saved = store.get('mafia-setup') || {};
+  const d = Object.assign({}, h.defaults, saved.provider === h.provider ? saved.cfg : {});
+  const picked = new Set(d.names && d.names.length ? d.names : []);
+  const cast = $('cast'); cast.innerHTML = '';
+  const extra = (d.names || []).filter(n => !h.allNames.includes(n));
+  for (const n of [...h.allNames, ...extra]) {
+    const row = document.createElement('div'); row.className = 'seat';
+    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.id = 'c_' + n; cb.dataset.name = n; cb.checked = picked.has(n); cb.onchange = count;
+    const lb = document.createElement('label'); lb.htmlFor = cb.id; lb.textContent = (h.display || {})[n] || n; lb.style.color = colorOf(n);
+    const sel = document.createElement('select'); sel.dataset.name = n;
+    const models = [...new Set([...(h.models || []), ...Object.values(d.modelMap || {})])];
+    for (const [v, text] of [['', 'auto'], ...models.map(m => [m, m.split('/').pop()])]) { const o = document.createElement('option'); o.value = v; o.textContent = text; sel.append(o); }
+    { const o = document.createElement('option'); o.value = '__other'; o.textContent = 'other…'; sel.append(o); }
+    sel.value = (d.modelMap || {})[n] || '';
+    sel.onchange = () => { // "other…": give just this seat a model that is not in the rotation
+      if (sel.value !== '__other') return;
+      const v = (prompt(`Model slug for ${n} (only this seat uses it):`) || '').trim();
+      if (!v) { sel.value = ''; return; }
+      const o = document.createElement('option'); o.value = v; o.textContent = v.split('/').pop(); sel.insertBefore(o, sel.lastChild); sel.value = v;
+    };
+    row.append(cb, lb, sel); cast.append(row);
+  }
+  document.querySelector(`input[name=seat][value=${d.human ? 'play' : 'watch'}]`).checked = true;
+  $('myName').value = d.name || 'Milkshake';
+  $('disguise').checked = d.disguise !== false; $('vig').checked = d.vigilante !== false; $('jester').checked = d.jester !== false; $('vigStyle').value = d.vigStyle || 'bold'; $('myRole').value = d.role || 'random';
+  (document.querySelector(`input[name=mafia][value="${d.mafia || 0}"]`) || document.querySelector('input[name=mafia][value="0"]')).checked = true;
+  $('disc').value = d.discussion || 1.75; $('urgency').value = d.urgency || 'balanced';
+  $('memory').checked = !!d.memory; $('learn').checked = d.learn !== false; $('hideNight').checked = !!d.hideNight; $('postgame').checked = d.postgame !== false;
+  $('models').value = d.models || (h.models || []).join(', ');
+  if (!picked.size) randomCast((d.players || 7) - (d.human ? 1 : 0));
+  decorateLobby();
+  $('rndN').value = Math.max(6, [...document.querySelectorAll('#cast input')].filter(c => c.checked).length);
+  count();
+}
+const seatBoxes = () => [...document.querySelectorAll('#cast input[type=checkbox]')];
+const playing = () => document.querySelector('input[name=seat]:checked').value === 'play';
+function randomCast(n){ const b = seatBoxes().sort(() => Math.random() - .5); b.forEach((c, i) => c.checked = i < n); count(); }
+function count(){
+  const ai = seatBoxes().filter(c => c.checked).length, total = ai + (playing() ? 1 : 0);
+  $('count').textContent = `${ai}  (total ${total})`; $('count').classList.toggle('bad', total < 7 || total > 15);
+  $('discNote').textContent = `× players alive = ${Math.max(2, Math.round((+$('disc').value || 1.75) * total))} messages on day 1`;
+  mafiaCheck(total);
+  return total;
+}
+// Mafia wins on parity. After the night kill and one wrong execution, town has (total - mafia - 2) left; if that is <= mafia, Day 1 can end the game.
+function mafiaCount(total){ const v = +document.querySelector('input[name=mafia]:checked')?.value || 0; return v || (total >= 11 ? 3 : 2); }
+function mafiaCheck(total){
+  total = total ?? (seatBoxes().filter(c => c.checked).length + (playing() ? 1 : 0));
+  const m = mafiaCount(total), bad = total > 0 && total - 2 <= 2 * m;
+  $('mafWarn').textContent = bad ? `⚠ ${m} Mafia out of ${total} players: the Mafia can win on Day 1 (town would be outnumbered after one night kill and one wrong vote). ${total >= 7 ? 'Use ' + (total >= 11 ? '3' : '2') + ' Mafia or add players.' : ''}` : '';
+  return bad;
+}
+function readCfg(){
+  const names = seatBoxes().filter(c => c.checked).map(c => c.dataset.name), total = names.length + (playing() ? 1 : 0);
+  const modelMap = {}; for (const s of document.querySelectorAll('#cast select')) if (s.value && names.includes(s.dataset.name)) modelMap[s.dataset.name] = s.value;
+  const mf = +document.querySelector('input[name=mafia]:checked').value;
+  return { human: playing(), name: $('myName').value.trim() || 'Milkshake', names, modelMap, models: $('models').value, mafia: mf || (total >= 11 ? 3 : 2), mafiaChoice: mf,
+    vigilante: $('vig').checked || $('myRole').value === 'Vigilante', jester: $('jester').checked || $('myRole').value === 'Jester', vigStyle: $('vigStyle').value, role: playing() ? $('myRole').value : 'random', discussion: +$('disc').value || 1.75, urgency: $('urgency').value, memory: $('memory').checked, learn: $('learn').checked, hideNight: $('hideNight').checked, postgame: $('postgame').checked, disguise: $('disguise').checked };
+}
+$('lobby').addEventListener('change', count); $('disc').addEventListener('input', count);
+$('rndBtn').onclick = () => randomCast(Math.min(15, Math.max(1, +$('rndN').value || 6)));
+$('allBtn').onclick = () => { seatBoxes().forEach(c => c.checked = true); count(); };
+$('noneBtn').onclick = () => { seatBoxes().forEach(c => c.checked = false); count(); };
+$('defModels').onclick = () => { $('models').value = (info.models || []).join(', '); ; syncSeatModels(); };
+function syncSeatModels(){ // the dropdown on every seat offers whatever is in the "Models in rotation" box (plus anything custom already chosen)
+  const list = $('models').value.split(',').map(x => x.trim()).filter(Boolean);
+  for (const sel of document.querySelectorAll('#cast select')) {
+    const cur = sel.value, have = [...sel.options].map(o => o.value);
+    const other = sel.lastChild;
+    for (const m of list) if (!have.includes(m)) { const o = document.createElement('option'); o.value = m; o.textContent = m.split('/').pop(); sel.insertBefore(o, other); }
+    sel.value = cur;
+  }
+}
+$('models').addEventListener('input', syncSeatModels);
+$('startBtn').onclick = async () => {
+  const cfg = readCfg(); $('err').textContent = '';
+  if (mafiaCheck() && !confirm($('mafWarn').textContent + '\n\nStart anyway?')) return;
+  try {
+    const r = await fetch('/start', { method: 'POST', body: JSON.stringify(cfg) }); const j = await r.json();
+    if (!j.ok) { $('err').textContent = j.error || 'Could not start.'; return; }
+    store.set('mafia-setup', { provider: info.provider, cfg: Object.assign({}, cfg, { mafia: cfg.mafiaChoice }) });
+    show('game'); // (the log was already cleared when this page connected; the first game lines may arrive before this runs)
+  } catch { $('err').textContent = 'The game is not reachable. Is the terminal window still open?'; }
+};
+
+// ---------- playing ----------
+function showPrompt(p){
+  prompting = true; $('dock').classList.add('live');
+  $('hint').textContent = p.kind === 'say' ? (p.talk ? 'TRASH TALK: your turn, say your piece (Enter on an empty box = pass)' : 'Your turn: say something (Enter on an empty box = pass)') : p.kind === 'reason' ? 'Reason for your vote? (optional, Enter to skip)' : (p.task || p.q);
+  const o = $('opts'); o.innerHTML = '';
+  const add = (text, fn) => { const b = document.createElement('button'); b.className = 'btn'; b.textContent = text; b.onclick = fn; o.append(b); };
+  if (p.kind === 'say') add('pass', () => send('', true));
+  if (p.kind === 'reason') add('skip reason', () => send('', true));
+  for (const n of p.options || []) add(dn(n), () => { const r = txt.value.trim(); txt.value = ''; send(r && n !== 'SKIP' ? n + ': ' + r : n, true); });
+  txt.focus();
+}
+function clearPrompt(){ prompting = false; $('dock').classList.remove('live'); $('hint').textContent = 'The others are talking. You can type any time; it goes out as your next line.'; $('opts').innerHTML = ''; }
+async function send(text, allowEmpty){
+  text = (text ?? txt.value).trim(); if (!text && !allowEmpty) return; txt.value = '';
+  await fetch('/input', { method:'POST', body: JSON.stringify({ text, blank: !text, urgency: +slider.value }) }).catch(()=>{});
+}
+$('send').onclick = () => send(txt.value, prompting);
+txt.addEventListener('keydown', e => { if (e.key === 'Enter') send(txt.value, prompting); });
+function setTone(n){ slider.value = n; $('tone').textContent = TONES[n]; }
+slider.addEventListener('input', () => { setTone(+slider.value); fetch('/input', { method:'POST', body: JSON.stringify({ urgency: +slider.value }) }).catch(()=>{}); });
+$('notesT').onchange = () => document.body.classList.toggle('nonotes', !$('notesT').checked);
+$('newBtn').onclick = async () => { $('newBtn').disabled = true; await fetch('/restart', { method: 'POST' }).catch(()=>{}); $('conn').textContent = 'starting a new game…'; };
+
+function onEvent(ev){
+  if (ev.t === 'hello') { // a fresh connection: the server now replays the whole game so far
+    DISP = ev.display || {}; loadSpriteList(); info = ev; gameOver = ev.phase === 'over'; me = null; meAlive = false; known = new Set(); mode = 'live';
+    clearLog(); clearPrompt(); $('roster').innerHTML = ''; $('newBtn').disabled = false; $('notesL').classList.add('hide'); VX.mute = true; vxTell();
+    if (ev.phase === 'lobby') { buildLobby(ev); show('lobby'); } else show('game');
+    return;
+  }
+  if (ev.t === 'caughtUp') { if (mode === 'live') VX.mute = false; return; }
+  if (ev.t === 'pace') { const id = ev.id; (mode === 'live' ? vxIdle() : Promise.resolve()).then(() => fetch('/spoken', { method: 'POST', body: JSON.stringify({ id }) }).catch(() => {})); return; } // the game waits for this before the next message
+  if (mode !== 'live') return; // looking at a replay: the live game catches up when you come back
+  if (ev.t === 'line') { if (view === 'lobby') show('game'); if (ev.kind === 'notes') $('notesL').classList.remove('hide'); addLine(ev.text, ev.kind); }
+  else if (ev.t === 'state') { me = ev.me; meAlive = ev.meAlive; known = new Set(ev.players.map(p => p.name)); drawRoster(ev.players); { const mine = ev.players.find(p => p.you); $('role').textContent = mine && mine.role ? 'you: ' + mine.role : ev.me ? '' : 'spectating'; } talking = !!ev.talk; if (ev.over && !ev.talk) gameOver = true; if (view !== 'game') show('game'); else layoutDock(); }
+  else if (ev.t === 'prompt') showPrompt(ev);
+  else if (ev.t === 'promptDone') clearPrompt();
+  else if (ev.t === 'urgency') setTone(ev.n);
+  else if (ev.t === 'queued') { const b = $('qBtn'); b.classList.toggle('hide', !ev.n); b.textContent = `✕ ${ev.n} waiting`; }
+  else if (ev.t === 'busy') $('busy').textContent = ev.who ? `… ${ev.who} is thinking` : '';
+  else if (ev.t === 'raffle') { addLine(ev.line, 'private'); $('busy').textContent = ev.line.replace(/^🎟 /, '🎟 raffle: '); }
+  else if (ev.t === 'over') { gameOver = true; talking = false; layoutDock(); }
+  else if (ev.t === 'restarting') $('conn').textContent = 'starting a new game…';
+}
+function connect(){
+  if (es) es.close();
+  es = new EventSource('/events');
+  es.onopen = () => $('conn').textContent = '● live';
+  es.onerror = () => { $('conn').textContent = 'reconnecting…'; es.close(); setTimeout(connect, 900); };
+  es.onmessage = e => onEvent(JSON.parse(e.data));
+}
+
+// ---------- replays ----------
+let before = 'game';
+$('repBtn').onclick = async () => {
+  if (view === 'replays') return; before = view === 'lobby' ? 'lobby' : 'game';
+  show('replays'); const box = $('games'); box.textContent = 'loading…';
+  try {
+    const list = await (await fetch('/games')).json(); box.innerHTML = '';
+    if (!list.length) box.textContent = 'No saved games yet. Finished games are saved in the games folder.';
+    for (const gm of list) {
+      const d = document.createElement('div'); d.className = 'gm';
+      const cells = [[new Date(gm.time).toLocaleString(), ''], [gm.winner + ' won', 'w ' + gm.winner], [gm.players + ' players', ''], [gm.human ? `${gm.human} was ${gm.humanRole}` : 'AI only', 'note']];
+      for (const [text, cls] of cells) { const s = document.createElement('span'); s.className = cls; s.textContent = text; d.append(s); }
+      d.onclick = async () => openReplay(await (await fetch('/games/' + gm.file)).json(), new Date(gm.time).toLocaleString());
+      box.append(d);
+    }
+  } catch { box.textContent = 'No game is running, so saved games cannot be listed. You can still open a game file above.'; }
+};
+$('backBtn').onclick = () => { if (mode === 'replay') leaveReplay(); else show(before); };
+$('file').onchange = async e => { const f = e.target.files[0]; if (!f) return; try { openReplay(JSON.parse(await f.text()), f.name); } catch { alert('That file is not a saved AI Mafia game.'); } e.target.value = ''; };
+function openReplay(game, title){
+  if (!game || !Array.isArray(game.transcript)) { alert('That file is not a saved AI Mafia game.'); return; }
+  replayTimer = null; mode = 'replay'; clearLog();
+  const human = (game.players || []).find(p => !p.model);
+  me = human ? human.name : null; known = new Set((game.players || []).map(p => p.name));
+  info = Object.assign({}, info, { players: (game.players || []).map(p => ({ name: p.name, alive: true, role: p.role, you: !p.model, model: p.model ? p.model.split('/').pop() : null })) });
+  drawRoster(info.players); $('notesL').classList.toggle('hide', !game.transcript.some(x => x.t === 'notes'));
+  show('game');
+  const w = $('watch'); w.innerHTML = ''; w.classList.remove('hide');
+  const lab = document.createElement('span'); lab.textContent = `REPLAY · ${title} · ${game.winner} won`;
+  const mk = (text, fn) => { const b = document.createElement('button'); b.className = 'btn'; b.textContent = text; b.onclick = fn; return b; };
+  let i = 0; const lines = game.transcript;
+  const step = () => { if (i >= lines.length) return false; const x = lines[i++]; addLine(x.line, x.t === 'public' ? undefined : x.t); log.scrollTop = log.scrollHeight; return true; };
+  // Playback: with Voices on, the next line waits until the current one has been read aloud; otherwise one line every 0.7s.
+  const stop = () => { replayTimer = null; play.textContent = '▶ play'; if (window.speechSynthesis && VX.on) { VX.q = []; VX.busy = false; speechSynthesis.cancel(); vxDrain(); } };
+  const run = async tok => { VX.mute = false; while (replayTimer === tok && mode === 'replay') { if (!step()) break; if (VX.on) { await vxIdle(); await new Promise(r => setTimeout(r, 250)); } else await new Promise(r => setTimeout(r, 700)); } if (replayTimer === tok) { replayTimer = null; play.textContent = '▶ play'; } };
+  const play = mk('▶ play', () => { if (replayTimer) stop(); else { if (i >= lines.length) { i = 0; clearLog(); info.players.forEach(p => p.alive = true); drawRoster(info.players); } play.textContent = '⏸ pause'; run(replayTimer = {}); } });
+  const all = mk('show all', () => { stop(); VX.mute = true; while (step()); VX.mute = false; });
+  w.append(lab, play, all, mk('← other replays', () => { stop(); $('repBtn').onclick(); view = 'replays'; }), mk('✕ close replay', leaveReplay));
+  VX.mute = true; while (step()); VX.mute = false; log.scrollTop = 0;
+}
+function leaveReplay(){ replayTimer = null; if (window.speechSynthesis && VX.on) { VX.q = []; VX.busy = false; speechSynthesis.cancel(); vxDrain(); } mode = 'live'; $('watch').innerHTML = ''; if (location.protocol === 'file:') { clearLog(); show('replays'); } else connect(); }
+
+// ================= TOWN VIEW (canvas, drawn from the same game lines as the log) =================
+const T = { talk: false, scene: 'day', players: [], speaker: null, actor: null, target: null, text: '', votes: {}, over: null, sprites: {}, list: null, listVer: 0, fade: 0 };
+const ROLE_COL = { Mafia: '#ff6b61', Doctor: '#5fd68a', Sheriff: '#5cc8ff', Vigilante: '#c792ff', Jester: '#ffb454', Villager: '#d0d7de', 'Not Mafia': '#d0d7de' };
+const normKey = s => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
+const cv = $('town'); let cx = cv.getContext('2d');
+let W = 0, H = 0;
+async function loadSpriteList(){
+  T.listVer++; T.sprites = {};
+  try { const r = await fetch('/sprites'); T.list = r.ok ? await r.json() : []; } catch { T.list = null; }
+  T.sprites = {};
+  decorateLobby();
+}
+function spriteFile(p){
+  const L = T.list;
+  if (!L) return location.protocol === 'file:' ? p.name + '.png' : null;
+  const by = {}; for (const f of L) by[normKey(f.replace(/\.[^.]+$/, ''))] = f;
+  return by[normKey(p.name)] || (p.you ? by['human'] : null) || null;
+}
+function cornerColor(im){
+  const w = im.naturalWidth, h = im.naturalHeight; if (!w || !h) return null;
+  const c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d'); g.drawImage(im, 0, 0);
+  const k = Math.max(1, Math.floor(Math.min(w, h) / 10)); let r = 0, gg = 0, b = 0, n = 0;
+  for (const [x0, y0] of [[0, 0], [w - k, 0], [0, h - k], [w - k, h - k]]) {
+    const d = g.getImageData(x0, y0, k, k).data;
+    for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 128) { r += d[i]; gg += d[i + 1]; b += d[i + 2]; n++; }
+  }
+  if (!n) return null;
+  return '#' + [r, gg, b].map(v => Math.round(v / n).toString(16).padStart(2, '0')).join('');
+}
+function getSprite(p){
+  let e = T.sprites[p.name]; if (e) return e;
+  if (!T.list && location.protocol !== 'file:') return { img: null, ok: false, color: null }; // list not loaded yet (page refresh): don't cache a miss
+  e = T.sprites[p.name] = { img: null, ok: false, color: null };
+  const f = spriteFile(p); if (!f) return e;
+  const im = new Image();
+  im.onload = () => { e.ok = true; try { e.color = cornerColor(im); } catch {} };
+  im.src = (location.protocol === 'file:' ? 'sprites/' : '/sprites/') + encodeURIComponent(f);
+  e.img = im; return e;
+}
+const hexRgb = h => { const m = /^#?([0-9a-f]{6})$/i.exec(h); const n = m ? parseInt(m[1], 16) : 0x888888; return [n >> 16, (n >> 8) & 255, n & 255]; };
+const rgbs = (r, g, b) => `rgb(${r | 0},${g | 0},${b | 0})`;
+function shade(h, f){ const [r, g, b] = hexRgb(h); return f <= 1 ? rgbs(r * f, g * f, b * f) : rgbs(r + (255 - r) * (f - 1), g + (255 - g) * (f - 1), b + (255 - b) * (f - 1)); }
+const R = (x, y, w, h, c) => { cx.fillStyle = c; cx.fillRect(x, y, w, h); };
+const rr = i => { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }; // fixed pseudo-random numbers, so scenery never flickers
+const pk = n => T.players.find(p => p.name === n);
+const dnText = s => { let o = String(s); for (const id of Object.keys(DISP).sort((a, b) => b.length - a.length)) o = o.split(id).join(DISP[id]); return o; };
+
+function townRoster(players){
+  const by = {}; for (const o of T.players) by[o.name] = o;
+  T.players = players.map(q => { const o = by[q.name] || { name: q.name }; if (o.alive !== false && q.alive === false) o.diedAt = performance.now(); o.alive = q.alive; o.you = !!q.you; o.role = q.role || null; o.revealed = q.revealed || null; return o; });
+}
+function townReset(){ T.talk = false; T.scene = 'day'; T.speaker = T.actor = T.target = null; T.text = ''; T.votes = {}; T.over = null; T.players = []; T.fade = 0; }
+function townFeed(t){
+  t = t.trim(); let m;
+  const townish = s => s === 'day' || s === 'night';
+  const go = s => { if (T.scene !== s) { T.fade = is3d && townish(T.scene) && townish(s) ? 0 : 1; T.scene = s; } }; // in 3D, day and night blend into each other instead of cutting to black
+  if ((m = t.match(/^=+\s*(DAY|NIGHT|MORNING) \d+\s*=+$/))) {
+    T.speaker = T.actor = T.target = null;
+    if (m[1] === 'NIGHT') { go('night'); T.votes = {}; T.text = 'Night falls. The town goes to sleep…'; } else { go('day'); T.text = m[1] === 'MORNING' ? 'Morning comes…' : ''; }
+    return; }
+  if ((m = t.match(/^=+\s*([\w-]+) WINS\s*=+$/))) { go('day'); T.over = m[1]; T.speaker = null; T.text = ''; return; }
+  if (/^=+\s*POST GAME/.test(t)) { go('day'); T.talk = true; T.speaker = null; T.text = ''; return; } // the dead stand up again for the trash talk
+  if (/^-+ VOTE -+$/.test(t)) { go('day'); T.votes = {}; T.speaker = null; T.text = 'Time to vote!'; return; }
+  if (/^\[Mafia\] submitted:/.test(t)) { go('mafia'); T.speaker = null; T.text = 'The Mafia have chosen their target.'; return; }
+  if ((m = t.match(/^\[Mafia\] ([\w-]+): (.+)$/))) { go('mafia'); T.speaker = m[1]; T.text = m[2]; return; }
+  if ((m = t.match(/^\[Doctor ([\w-]+)\] protects ([\w-]+)/))) { go('doctor'); T.actor = T.speaker = m[1]; T.target = m[2]; T.text = `${m[1]} protects ${m[2]} tonight.`; return; }
+  if ((m = t.match(/^\[Sheriff ([\w-]+)\] checks ([\w-]+): (.+)$/))) { go('sheriff'); T.actor = T.speaker = m[1]; T.target = m[2]; T.text = `${m[2]} is: ${m[3]}.`; return; }
+  if ((m = t.match(/^\[Vigilante ([\w-]+)\] (.+)$/))) { go('vigilante'); T.actor = T.speaker = m[1]; T.target = (m[2].match(/shoots ([\w-]+)/) || [])[1] || null; T.text = `${m[1]} ${m[2]}.`; return; }
+  if ((m = t.match(/^([\w-]+) votes ([\w-]+)(?: [—-] (.*))?$/)) && pk(m[1])) {
+    go('day'); T.votes[m[1]] = m[2]; T.speaker = m[1]; T.text = `${m[1]} votes ${m[2]}${m[3] ? ' — ' + m[3] : ''}`; return; }
+  if ((m = t.match(/^([\w-]+) died\.$/))) { go('day'); T.speaker = null; T.text = t; return; }
+  if (/^(Nobody died last night\.|No one is executed\.)/.test(t) || /^[\w-]+ is executed/.test(t)) { go('day'); T.speaker = null; T.text = t; return; }
+  if ((m = t.match(/^([\w-]+): (.+)$/)) && pk(m[1])) { go('day'); T.speaker = m[1]; T.text = m[2]; return; }
+}
+
+// ---- drawing ----
+
+// A dead player's soul floats up and fades; a headstone with their face rises in its place.
+function grave(e, col, u, t){
+  const soul = Math.min(1, t / 0.6), rise = t <= 0.6 ? soul : 1;
+  if (t < 0.62) { // the soul: their head, drifting up out of the scene
+    cx.save(); cx.globalAlpha = Math.max(0, 1 - soul) * 0.95; cx.translate(0, -3.15 * u - rise * 2.4 * u); cx.scale(1 + rise * 0.25, 1 + rise * 0.25);
+    cx.shadowColor = 'rgba(255,255,255,.75)'; cx.shadowBlur = u * 0.7;
+    if (e.ok) cx.drawImage(e.img, -0.5 * u, 0, u, u); else R(-0.5 * u, 0, u, u, col);
+    cx.restore();
+  }
+  const g = Math.max(0, Math.min(1, (t - 0.35) / 0.65)), ease = 1 - Math.pow(1 - g, 3); // the stone pushes up out of the ground
+  if (ease <= 0) return;
+  cx.save(); cx.scale(1, ease);
+  const w = 0.74 * u, top = -1.95 * u, bot = -0.16 * u;
+  R(-1.02 * u, -0.26 * u, 2.04 * u, 0.26 * u, '#2b2f36'); // plot
+  cx.beginPath(); cx.moveTo(-w, bot); cx.lineTo(-w, top + w); cx.arc(0, top + w, w, Math.PI, 0); cx.lineTo(w, bot); cx.closePath();
+  const gr = cx.createLinearGradient(-w, 0, w, 0); gr.addColorStop(0, '#8a9099'); gr.addColorStop(0.45, '#6f757e'); gr.addColorStop(1, '#4d535b');
+  cx.fillStyle = gr; cx.fill(); cx.strokeStyle = 'rgba(0,0,0,.6)'; cx.lineWidth = Math.max(1, u * 0.05); cx.stroke();
+  const fs = 0.82 * u, fx = -fs / 2, fy = top + w - fs * 0.46; // their face, carved into the stone
+  cx.save(); cx.globalAlpha = 0.9;
+  if (e.ok) cx.drawImage(e.img, fx, fy, fs, fs); else { R(fx, fy, fs, fs, shade(col, 0.75)); }
+  cx.restore();
+  cx.strokeStyle = 'rgba(0,0,0,.45)'; cx.lineWidth = Math.max(1, u * 0.04); cx.strokeRect(fx, fy, fs, fs);
+  cx.fillStyle = 'rgba(0,0,0,.4)'; cx.fillRect(-0.34 * u, fy + fs + 0.22 * u, 0.68 * u, Math.max(1, u * 0.07)); // engraved line under the face
+  cx.restore();
+}
+function figure(p, x, y, u, o = {}){
+  const e = getSprite(p), col = e.color || colorOf(p.name), now = performance.now();
+  p._x = x; p._y = y; p._u = u;
+  const live = p.alive || T.talk, fall = live ? 0 : Math.min(1, (now - (p.diedAt || 0)) / 1100); // the dead ascend, then a headstone stays behind
+  cx.save(); cx.translate(x, y);
+  cx.fillStyle = 'rgba(0,0,0,.28)'; cx.beginPath(); cx.ellipse(0, 0, u * 0.95, u * 0.22, 0, 0, 7); cx.fill();
+  if (!live) { grave(e, col, u, fall); cx.restore(); if (o.label !== false) label(p, x, y, u, o); return; }
+  if (o.speaking) { cx.translate(0, -Math.abs(Math.sin(now / 140)) * 0.09 * u); cx.rotate(Math.sin(now / 280) * 0.03); } // the WHOLE character hops and sways, feet planted by the shadow
+  const bob = 0, dark = shade(col, 0.6), lw = Math.max(1, u * 0.045);
+  cx.strokeStyle = 'rgba(0,0,0,.55)'; cx.lineWidth = lw;
+  const box = (bx, by, bw, bh, c) => { R(bx, by, bw, bh, c); cx.strokeRect(bx, by, bw, bh); };
+  box(-0.5 * u, -0.9 * u, 0.45 * u, 0.9 * u, dark); box(0.05 * u, -0.9 * u, 0.45 * u, 0.9 * u, dark);
+  box(-0.93 * u, -2.05 * u, 0.36 * u, 1.05 * u, shade(col, 0.8)); box(0.57 * u, -2.05 * u, 0.36 * u, 1.05 * u, shade(col, 0.8));
+  box(-0.57 * u, -2.1 * u, 1.14 * u, 1.25 * u, col); R(0.22 * u, -2.1 * u, 0.35 * u, 1.25 * u, 'rgba(0,0,0,.14)');
+  const hx = -0.5 * u, hy = -3.15 * u + bob;
+  if (e.ok) cx.drawImage(e.img, hx, hy, u, u);
+  else { R(hx, hy, u, u, col); cx.fillStyle = 'rgba(255,255,255,.9)'; cx.font = `700 ${u * 0.45}px sans-serif`; cx.textAlign = 'center'; cx.textBaseline = 'middle'; cx.fillText(dnText(p.name).replace(/[^A-Za-z0-9]/g, '').slice(0, 2).toUpperCase(), 0, hy + u / 2); }
+  cx.strokeRect(hx, hy, u, u);
+  cx.restore();
+  if (o.label !== false) label(p, x, y, u, o);
+}
+function outlined(text, x, y, size, color, weight = 600){
+  cx.font = `${weight} ${size}px sans-serif`; cx.textAlign = 'center'; cx.textBaseline = 'alphabetic';
+  cx.lineJoin = 'round'; cx.lineWidth = Math.max(2, size * 0.18); cx.strokeStyle = 'rgba(0,0,0,.8)'; cx.strokeText(text, x, y); cx.fillStyle = color; cx.fillText(text, x, y);
+}
+function label(p, x, y, u, o){
+  const fs = Math.max(9, Math.min(20, u * 0.3)), top = y - 3.3 * u;
+  const role = p.role || p.revealed;
+  let ny = top;
+  if (role && p.alive !== undefined) { outlined(role, x, top, fs * 0.92, ROLE_COL[role] || '#d0d7de', 700); ny = top - fs * 1.1; }
+  outlined((p.alive === false && !T.talk ? '✝ ' : '') + dnText(p.name) + (p.you ? ' (you)' : ''), x, ny, fs, p.alive || T.talk ? '#f1f5f9' : '#9aa4ae');
+  if (o.speaking && (p.alive || T.talk)) { cx.fillStyle = '#ffffff'; cx.beginPath(); const ty = ny - fs * 1.5; cx.moveTo(x, ty + fs * 0.7); cx.lineTo(x - fs * 0.45, ty); cx.lineTo(x + fs * 0.45, ty); cx.fill(); }
+}
+function wrap(text, maxW){
+  const words = String(text).split(/\s+/), lines = []; let cur = '';
+  for (const w of words) { const t = cur ? cur + ' ' + w : w; if (cur && cx.measureText(t).width > maxW) { lines.push(cur); cur = w; } else cur = t; }
+  if (cur) lines.push(cur); return lines;
+}
+function subtitle(){
+  if (!T.text) return;
+  const fs = Math.max(14, Math.min(28, H * 0.042)); cx.font = `600 ${fs}px sans-serif`;
+  const lines = wrap(dnText(T.text), W * 0.8).slice(0, 4), lh = fs * 1.3; let y = H - 22 - (lines.length - 1) * lh;
+  for (const l of lines) { outlined(l, W / 2, y, fs, '#ffffff', 600); y += lh; }
+}
+function windows(x, y, w, h, night, seed){
+  const cols = Math.max(2, Math.floor(w / (H * 0.05))), rows = Math.max(2, Math.floor(h / (H * 0.06)));
+  const cw = w / (cols + 1), rh = h / (rows + 1);
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    const on = rr(seed * 31 + r * 7 + c) > 0.45;
+    R(x + cw * (c + 0.6), y + rh * (r + 0.5), cw * 0.55, rh * 0.5, night ? (on ? '#f3c780' : '#4d4670') : (on ? '#f7d9b5' : '#c5d8e8'));
+  }
+}
+function sky(top, bot, h){ const g = cx.createLinearGradient(0, 0, 0, h); g.addColorStop(0, top); g.addColorStop(1, bot); R(0, 0, W, h, g); }
+function glow(x, y, r, c){ const g = cx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, c); g.addColorStop(1, 'rgba(0,0,0,0)'); cx.fillStyle = g; cx.fillRect(x - r, y - r, r * 2, r * 2); }
+function tree(x, y, s, night){ R(x - s * 0.06, y - s * 0.25, s * 0.12, s * 0.25, '#4a3523'); cx.fillStyle = night ? '#1f4a35' : '#3f9a52'; for (let i = 0; i < 3; i++) { cx.beginPath(); cx.moveTo(x, y - s * (0.95 - i * 0.2)); cx.lineTo(x - s * (0.3 + i * 0.12), y - s * (0.25 + i * 0.15)); cx.lineTo(x + s * (0.3 + i * 0.12), y - s * (0.25 + i * 0.15)); cx.fill(); } }
+function lamp(x, y, s, night){ R(x - s * 0.02, y - s, s * 0.04, s, '#1b1f27'); if (night) glow(x, y - s, s * 0.9, 'rgba(255,200,120,.55)'); cx.fillStyle = night ? '#ffe3a8' : '#f4f4f0'; cx.beginPath(); cx.arc(x, y - s, s * 0.07, 0, 7); cx.fill(); }
+
+function sceneTown(night){
+  const hz = H * 0.58;
+  sky(night ? '#171233' : '#8cc0e4', night ? '#35295c' : '#dcebf2', hz);
+  if (night) { cx.fillStyle = '#e8e4cf'; cx.beginPath(); cx.arc(W * 0.8, H * 0.16, H * 0.06, 0, 7); cx.fill(); glow(W * 0.8, H * 0.16, H * 0.25, 'rgba(230,225,190,.25)'); for (let i = 0; i < 40; i++) R(rr(i) * W, rr(i + 99) * hz * 0.7, 2, 2, 'rgba(255,255,255,.7)'); }
+  const bw = W / 8;
+  for (let i = -1; i < 9; i++) { const bh = H * (0.2 + Math.floor(rr(i + 5) * 5) * 0.05), x = i * bw, y = hz - bh; R(x, y, bw * 0.94, bh, night ? shade('#3b3563', 0.75 + rr(i) * 0.3) : shade('#7f96b3', 0.85 + rr(i) * 0.25)); windows(x, y, bw * 0.94, bh, night, i + 3); }
+  R(0, hz, W, H - hz, night ? '#1d3a31' : '#8fb18f');
+  cx.fillStyle = night ? '#3a3a52' : '#cbc4b0'; cx.beginPath(); cx.ellipse(W / 2, H * 0.7, W * 0.47, H * 0.25, 0, 0, 7); cx.fill();
+  cx.strokeStyle = night ? '#4a4a66' : '#b9b19a'; cx.lineWidth = 3; cx.stroke();
+  tree(W * 0.07, H * 0.66, H * 0.34, night); tree(W * 0.94, H * 0.7, H * 0.38, night); tree(W * 0.16, H * 0.6, H * 0.22, night);
+  lamp(W * 0.22, H * 0.74, H * 0.3, night); lamp(W * 0.78, H * 0.74, H * 0.3, night); lamp(W * 0.36, H * 0.6, H * 0.2, night); lamp(W * 0.64, H * 0.6, H * 0.2, night);
+  // players stand in a ring
+  const list = T.players, n = list.length; if (!n) return;
+  const cxp = W / 2, cyp = H * 0.7, rx = W * 0.37, ry = H * 0.16, base = Math.min(H * 0.05, W * 0.04, W / (n * 1.9 + 2));
+  const pos = list.map((p, i) => { const a = Math.PI / 2 + (i / n) * Math.PI * 2, y = cyp + Math.sin(a) * ry, persp = 0.8 + 0.4 * ((y - (cyp - ry)) / (2 * ry)); return { p, x: cxp + Math.cos(a) * rx, y, u: base * persp }; }).sort((a, b) => a.y - b.y);
+  for (const q of pos) figure(q.p, q.x, q.y, q.u, { speaking: q.p.name === T.speaker });
+  // vote arrows + counts
+  const cnt = {};
+  for (const [from, to] of Object.entries(T.votes)) { const a = pk(from), b = pk(to); if (!a || !b || !a._x || !b._x) continue; cnt[to] = (cnt[to] || 0) + 1;
+    const x1 = a._x, y1 = a._y - 3.4 * a._u, x2 = b._x, y2 = b._y - 3.5 * b._u, mx = (x1 + x2) / 2, my = Math.min(y1, y2) - H * 0.08;
+    cx.strokeStyle = 'rgba(255,92,80,.85)'; cx.lineWidth = 3; cx.beginPath(); cx.moveTo(x1, y1); cx.quadraticCurveTo(mx, my, x2, y2); cx.stroke();
+    const ang = Math.atan2(y2 - my, x2 - mx); cx.fillStyle = 'rgba(255,92,80,.95)'; cx.beginPath(); cx.moveTo(x2, y2); cx.lineTo(x2 - 12 * Math.cos(ang - 0.45), y2 - 12 * Math.sin(ang - 0.45)); cx.lineTo(x2 - 12 * Math.cos(ang + 0.45), y2 - 12 * Math.sin(ang + 0.45)); cx.fill(); }
+  for (const [to, c] of Object.entries(cnt)) { const b = pk(to); cx.fillStyle = '#d6372c'; cx.beginPath(); cx.arc(b._x + b._u * 0.95, b._y - 3.4 * b._u, Math.max(9, b._u * 0.34), 0, 7); cx.fill(); outlined(String(c), b._x + b._u * 0.95, b._y - 3.4 * b._u + Math.max(9, b._u * 0.34) * 0.35, Math.max(11, b._u * 0.4), '#fff', 700); }
+  if (night) R(0, 0, W, H, 'rgba(8,8,40,.22)');
+}
+function frame3(x, y, w, h, inner){ R(x - 4, y - 4, w + 8, h + 8, '#3a2a1c'); R(x, y, w, h, inner); }
+function sceneMafia(){
+  R(0, 0, W, H, '#240a10'); R(0, H * 0.7, W, H * 0.3, '#12050a'); R(0, 0, W * 0.07, H, '#5b1018'); R(W * 0.93, 0, W * 0.07, H, '#5b1018');
+  glow(W / 2, H * 0.55, H * 0.9, 'rgba(210,40,40,.38)'); glow(W / 2, H * 0.12, H * 0.5, 'rgba(255,150,90,.3)');
+  frame3(W * 0.16, H * 0.14, W * 0.17, H * 0.32, '#3b2230'); frame3(W * 0.62, H * 0.12, W * 0.24, H * 0.26, '#4a3b22'); R(W * 0.67, H * 0.17, W * 0.1, H * 0.1, '#1b1b1b');
+  R(W * 0.1, H * 0.62, W * 0.2, H * 0.08, '#0c0406');
+  const alive = T.players.filter(p => p.alive && p.role === 'Mafia'); const sp = pk(T.speaker);
+  const who = alive.length ? alive : sp ? [sp] : [];
+  const u = Math.min(H * 0.09, W / (who.length * 2.6 + 2)); who.forEach((p, i) => figure(p, W * (i + 1) / (who.length + 1), H * 0.86, u, { speaking: p.name === T.speaker }));
+  R(0, 0, W, H, 'rgba(30,0,0,.15)');
+}
+function sceneDoctor(){
+  R(0, 0, W, H * 0.7, '#cfd9df'); R(0, H * 0.58, W, H * 0.07, '#1f4a63');
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 22; c++) R(c * W / 20 - (r % 2) * W / 40, H * 0.65 + r * H * 0.045, W / 20, H * 0.045, (r + c) % 2 ? '#b9c3cb' : '#aab6bf');
+  glow(W / 2, 0, H, 'rgba(255,255,255,.5)');
+  R(W * 0.06, H * 0.22, W * 0.14, H * 0.42, '#e8eef1'); R(W * 0.06, H * 0.22, W * 0.14, 3, '#9aa7b0'); R(W * 0.125, H * 0.3, W * 0.012, H * 0.08, '#d6372c'); R(W * 0.105, H * 0.325, W * 0.052, H * 0.018, '#d6372c');
+  frame3(W * 0.26, H * 0.12, W * 0.14, H * 0.3, '#9ec3a0'); frame3(W * 0.43, H * 0.14, W * 0.12, H * 0.26, '#d9a88b'); frame3(W * 0.6, H * 0.1, W * 0.2, H * 0.32, '#8db0d8'); frame3(W * 0.84, H * 0.16, W * 0.11, H * 0.28, '#a5a0c9');
+  const a = pk(T.actor); if (a) figure(a, W / 2, H * 0.9, H * 0.11, { speaking: true });
+  desk('#eef1f4', '#cfd6dc');
+}
+function desk(top, front){
+  cx.fillStyle = top; cx.beginPath(); cx.moveTo(W * 0.27, H * 0.76); cx.lineTo(W * 0.73, H * 0.76); cx.lineTo(W * 0.77, H * 0.82); cx.lineTo(W * 0.23, H * 0.82); cx.fill();
+  R(W * 0.23, H * 0.82, W * 0.54, H * 0.18, front); R(W * 0.24, H * 0.84, W * 0.1, H * 0.12, 'rgba(0,0,0,.12)');
+  R(W * 0.3, H * 0.775, W * 0.07, H * 0.02, '#222'); R(W * 0.62, H * 0.77, W * 0.06, H * 0.03, '#e6dfc8');
+}
+function sceneSheriff(){
+  R(0, 0, W, H, '#2c2d3d'); R(0, H * 0.7, W, H * 0.3, '#3b3446'); glow(W / 2, H * 0.3, H * 0.8, 'rgba(255,230,190,.22)');
+  frame3(W * 0.05, H * 0.2, W * 0.16, H * 0.4, '#d8d4cf'); frame3(W * 0.79, H * 0.2, W * 0.16, H * 0.4, '#bfc3cf');
+  const bx = W * 0.26, by = H * 0.06, bw = W * 0.48, bh = H * 0.5; frame3(bx, by, bw, bh, '#b88c5a');
+  const list = T.players, n = Math.max(1, list.length), th = Math.min(H * 0.085, bw / (n * 0.7 + 2)); const pts = list.map((p, i) => { const a = (i / n) * Math.PI * 2 + 0.5; return { p, x: bx + bw / 2 + Math.cos(a) * bw * 0.36 * (0.7 + 0.3 * rr(i + 40)), y: by + bh / 2 + Math.sin(a) * bh * 0.36 * (0.7 + 0.3 * rr(i + 70)) }; });
+  cx.strokeStyle = 'rgba(200,40,40,.75)'; cx.lineWidth = 2; for (let i = 0; i < pts.length; i++) for (const j of [1, 3]) { const q = pts[(i + j) % pts.length]; cx.beginPath(); cx.moveTo(pts[i].x, pts[i].y); cx.lineTo(q.x, q.y); cx.stroke(); }
+  for (const q of pts) { const e = getSprite(q.p); cx.save(); if (!q.p.alive) cx.globalAlpha = 0.35; R(q.x - th / 2 - 3, q.y - th / 2 - 3, th + 6, th + 6, '#f4efe4'); if (e.ok) cx.drawImage(e.img, q.x - th / 2, q.y - th / 2, th, th); else R(q.x - th / 2, q.y - th / 2, th, th, e.color || colorOf(q.p.name)); cx.fillStyle = '#d6372c'; cx.beginPath(); cx.arc(q.x, q.y - th / 2 - 3, 3, 0, 7); cx.fill(); cx.restore();
+    if (q.p.name === T.target) { cx.strokeStyle = '#ffdf5d'; cx.lineWidth = 4; cx.strokeRect(q.x - th / 2 - 6, q.y - th / 2 - 6, th + 12, th + 12); } }
+  const a = pk(T.actor); if (a) figure(a, W / 2, H * 0.92, H * 0.105, { speaking: true });
+  desk('#8a6a48', '#6e5238');
+}
+function sceneVigilante(){
+  sky('#1a1535', '#3a2d63', H * 0.75); cx.fillStyle = '#e8e4cf'; cx.beginPath(); cx.arc(W * 0.82, H * 0.17, H * 0.07, 0, 7); cx.fill(); glow(W * 0.82, H * 0.17, H * 0.3, 'rgba(230,225,190,.25)');
+  for (let i = 0; i < 50; i++) R(rr(i) * W, rr(i + 77) * H * 0.4, 2, 2, 'rgba(255,255,255,.7)');
+  const bw = W / 6; for (let i = -1; i < 7; i++) { const bh = H * (0.28 + Math.floor(rr(i + 9) * 4) * 0.07), x = i * bw, y = H * 0.74 - bh; R(x, y, bw * 0.9, bh, shade('#2f2852', 0.8 + rr(i + 2) * 0.35)); windows(x, y, bw * 0.9, bh, true, i + 11); }
+  R(0, H * 0.74, W, H * 0.26, '#2d2850'); R(0, H * 0.72, W, H * 0.04, '#4b437a');
+  const a = pk(T.actor); if (a) figure(a, W * 0.45, H * 0.92, H * 0.11, { speaking: true });
+  R(W * 0.62, H * 0.84, W * 0.1, H * 0.1, '#7a4a2a'); R(W * 0.62, H * 0.84, W * 0.1, 4, '#9a6a44'); cx.strokeStyle = '#15151c'; cx.lineWidth = Math.max(4, H * 0.012); cx.beginPath(); cx.moveTo(W * 0.56, H * 0.832); cx.lineTo(W * 0.78, H * 0.822); cx.stroke(); R(W * 0.6, H * 0.826, W * 0.05, H * 0.014, '#15151c');
+  if (T.target) { const t = pk(T.target); if (t) { const e = getSprite(t), s = H * 0.1; cx.save(); cx.globalAlpha = 0.9; R(W * 0.83, H * 0.3, s + 8, s + 8, '#f4efe4'); if (e.ok) cx.drawImage(e.img, W * 0.83 + 4, H * 0.3 + 4, s, s); cx.strokeStyle = '#ff4d3f'; cx.lineWidth = 4; cx.strokeRect(W * 0.83 - 6, H * 0.3 - 6, s + 20, s + 20); cx.restore(); } }
+}
+// ---- 3D town (town3d.js + three.min.js). Falls back to the flat drawing when WebGL or the files are missing. ----
+let use3d = store.get('mafia-3d') !== 'off', t3state = null, is3d = false; // t3state: null = not tried, true = running, false = failed
+const t3api = { getSprite, colorOf, initials: p => dnText(p.name).replace(/[^A-Za-z0-9]/g, '').slice(0, 2).toUpperCase() };
+let camFollow = store.get('mafia-cam') !== 'wide';
+function camLabel(){ skinLabel(); const b = $('camBtn'); b.textContent = camFollow ? 'Cam: follow speaker' : 'Cam: wide (default)'; b.classList.toggle('hide', !(window.Town3D && t3state !== false && use3d)); if (window.Town3D) Town3D.follow = camFollow; }
+$('camBtn').onclick = () => { camFollow = !camFollow; store.set('mafia-cam', camFollow ? 'follow' : 'wide'); camLabel(); };
+function t3Label(){ camLabel(); const b = $('t3Btn'); if (!window.Town3D || t3state === false) { b.textContent = 'Town: flat'; b.disabled = true; b.title = '3D is not available here (three.min.js / town3d.js missing, or no WebGL)'; } else b.textContent = use3d ? 'Town: 3D' : 'Town: flat'; }
+// ---- Minecraft skin for your own player (3D town only). skin.png + skin.json live next to the game, so clearing the browser loses nothing ----
+var SKIN = { on: false, img: null, ver: 0, has: false }; t3api.skin = SKIN;
+function skinLabel(){ if (!SKIN) return; const show = !!(window.Town3D && t3state !== false && use3d && location.protocol !== 'file:'); const b = $('skinBtn'); b.textContent = !SKIN.has ? 'Skin: none' : SKIN.on ? 'Skin: on (Minecraft body)' : 'Skin: off (AI body)'; b.classList.toggle('hide', !show); $('skinUp').classList.toggle('hide', !show); $('skinUp').textContent = SKIN.has ? 'Change skin' : 'Upload skin'; }
+async function skinLoad(){
+  try {
+    const i = await (await fetch('/skininfo')).json(); SKIN.has = !!i.has; SKIN.on = i.on !== false;
+    if (i.has && SKIN.ver !== i.v) { const img = new Image(); img.src = '/skin.png?v=' + i.v; await img.decode(); SKIN.img = img; SKIN.ver = i.v; }
+    if (!i.has) SKIN.img = null;
+  } catch (e) {}
+  skinLabel();
+}
+$('skinBtn').onclick = () => { if (!SKIN.has) return $('skinFile').click(); SKIN.on = !SKIN.on; skinLabel(); fetch('/skinon', { method: 'POST', body: JSON.stringify({ on: SKIN.on }) }).catch(() => {}); };
+$('skinUp').onclick = () => $('skinFile').click();
+$('skinFile').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try { const r = await fetch('/skin', { method: 'POST', body: f }), j = await r.json().catch(() => ({})); if (!r.ok) { alert(j.error || 'Could not save that skin.'); return; } } catch (err) { alert('Could not save that skin: ' + err.message); return; }
+  await skinLoad();
+};
+if (location.protocol !== 'file:') skinLoad();
+$('t3Btn').onclick = () => { use3d = !use3d; store.set('mafia-3d', use3d ? 'on' : 'off'); t3Label(); };
+t3Label();
+function overlay3d(){
+  const list = T.players.filter(p => p._on).sort((a, b) => b._d - a._d);
+  if (T.text) { const g = cx.createLinearGradient(0, H * 0.72, 0, H); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.55)'); cx.fillStyle = g; cx.fillRect(0, H * 0.72, W, H * 0.28); }
+  // vote arrows + counts (town only)
+  const cnt = {};
+  if (T.scene === 'day' || T.scene === 'night') for (const [from, to] of Object.entries(T.votes)) { const a = pk(from), b = pk(to); if (!a || !b || !a._on || !b._on) continue; cnt[to] = (cnt[to] || 0) + 1;
+    const x1 = a._ax, y1 = a._ay - a._fs * 2.3, x2 = b._ax, y2 = b._ay - b._fs * 2.5, mx = (x1 + x2) / 2, my = Math.min(y1, y2) - H * 0.09;
+    cx.strokeStyle = 'rgba(255,92,80,.9)'; cx.lineWidth = 3; cx.beginPath(); cx.moveTo(x1, y1); cx.quadraticCurveTo(mx, my, x2, y2); cx.stroke();
+    const ang = Math.atan2(y2 - my, x2 - mx); cx.fillStyle = 'rgba(255,92,80,.95)'; cx.beginPath(); cx.moveTo(x2, y2); cx.lineTo(x2 - 13 * Math.cos(ang - 0.45), y2 - 13 * Math.sin(ang - 0.45)); cx.lineTo(x2 - 13 * Math.cos(ang + 0.45), y2 - 13 * Math.sin(ang + 0.45)); cx.fill(); }
+  const placed = []; cx.font = '600 16px sans-serif';
+  for (const p of list.slice().reverse()) { // nearest first; a tag that would cover another one slides up
+    const fs = p._fs, role = p.role || p.revealed, name = (p.alive === false && !T.talk ? '✝ ' : '') + dnText(p.name) + (p.you ? ' (you)' : '');
+    cx.font = `600 ${fs}px sans-serif`; const w = cx.measureText(name).width + 8, hgt = fs * (role ? 2.05 : 1.15);
+    let y = p._ay; for (let k = 0; k < 8 && placed.some(q => Math.abs(q.x - p._ax) < (q.w + w) / 2 && y > q.y - q.h && y - hgt < q.y); k++) y -= fs * 0.6;
+    placed.push({ x: p._ax, y, w, h: hgt }); p._ty = y; p._tn = name; p._tw = w;
+  }
+  for (const p of list) {
+    const fs = p._fs, x = p._ax; let y = p._ty; const role = p.role || p.revealed;
+    if (role) { outlined(role, x, y, fs * 0.85, ROLE_COL[role] || '#d0d7de', 700); y -= fs * 1.02; }
+    outlined(p._tn, x, y, fs, p.alive || T.talk ? '#f1f5f9' : '#aab3bc');
+    if (p.name === T.speaker && (p.alive || T.talk)) { const ty = y - fs * 1.6 + Math.sin(performance.now() / 180) * 2; cx.fillStyle = '#ffffff'; cx.strokeStyle = 'rgba(0,0,0,.7)'; cx.lineWidth = 2; cx.beginPath(); cx.moveTo(x, ty + fs * 0.7); cx.lineTo(x - fs * 0.45, ty); cx.lineTo(x + fs * 0.45, ty); cx.closePath(); cx.stroke(); cx.fill(); }
+    if (cnt[p.name]) { const r = Math.max(10, fs * 0.75), bx = x + p._tw / 2 + r + 2, by = p._ty - fs * 0.35; cx.fillStyle = '#d6372c'; cx.beginPath(); cx.arc(bx, by, r, 0, 7); cx.fill(); outlined(String(cnt[p.name]), bx, by + r * 0.38, r * 1.1, '#fff', 700); }
+  }
+}
+function townFrame(){
+  requestAnimationFrame(townFrame);
+  if (view !== 'game' || document.body.classList.contains('logview')) return;
+  const wr = $('townWrap').getBoundingClientRect(); if (wr.width < 10 || wr.height < 10) return;
+  const dpr = window.devicePixelRatio || 1, nw = Math.round(wr.width * dpr), nh = Math.round(wr.height * dpr);
+  if (cv.width !== nw || cv.height !== nh) { cv.width = nw; cv.height = nh; }
+  W = wr.width; H = wr.height; cx.setTransform(dpr, 0, 0, dpr, 0, 0); cx.clearRect(0, 0, W, H);
+  is3d = false;
+  if (use3d && window.Town3D && t3state !== false) {
+    if (t3state === null) { t3state = Town3D.init($('townWrap'), cv); t3Label(); }
+    if (t3state) { try { is3d = Town3D.frame(T, W, H, t3api) === true; } catch (err) { console.warn('3D town stopped, using the flat view:', err); t3state = false; t3Label(); } if (Town3D.lost) { t3state = false; t3Label(); } }
+  }
+  if (window.Town3D && t3state !== null) Town3D.show(is3d);
+  if (is3d) overlay3d();
+  else ({ day: () => sceneTown(false), night: () => sceneTown(true), mafia: sceneMafia, doctor: sceneDoctor, sheriff: sceneSheriff, vigilante: sceneVigilante }[T.scene] || (() => sceneTown(false)))();
+  if (T.over) { const win = T.over === 'MAFIA'; outlined(win ? 'MAFIA WINS' : T.over + ' WINS', W / 2, H * 0.12, Math.max(24, H * 0.08), win ? '#ff6b61' : T.over === 'JESTER' ? '#ffb454' : '#7ee787', 800); }
+  subtitle();
+  if (T.fade > 0) { R(0, 0, W, H, `rgba(0,0,0,${T.fade})`); T.fade = Math.max(0, T.fade - 0.06); }
+}
+requestAnimationFrame(townFrame);
+
+// ---- sprite thumbnails on the setup screen ----
+function decorateLobby(){
+  const set = (img, name, you) => { const f = spriteFile({ name, you }); if (f && T.list) { img.src = '/sprites/' + encodeURIComponent(f); img.style.visibility = 'visible'; } else img.style.visibility = 'hidden'; };
+  for (const row of document.querySelectorAll('#cast .seat')) { let im = row.querySelector('img.thumb'); if (!im) { im = document.createElement('img'); im.className = 'thumb'; row.insertBefore(im, row.firstChild.nextSibling ? row.children[1] : null); } set(im, row.querySelector('input').dataset.name, false); }
+  const my = $('myThumb'); if (my) set(my, $('myName').value.trim() || 'Milkshake', true);
+}
+// view switch
+function applyView(){ const logv = store.get('mafia-view') === 'log'; document.body.classList.toggle('logview', logv); $('viewBtn').textContent = logv ? 'Town view' : 'Log view'; }
+$('viewBtn').onclick = () => { store.set('mafia-view', document.body.classList.contains('logview') ? 'town' : 'log'); applyView(); };
+$('myName').addEventListener('input', decorateLobby);
+for (const r of document.querySelectorAll('input[name=mafia]')) r.addEventListener('change', () => mafiaCheck());
+for (const r of document.querySelectorAll('input[name=seat]')) r.addEventListener('change', () => { mafiaCheck(); $('roleRow').style.display = playing() ? '' : 'none'; });
+$('roleRow').style.display = playing() ? '' : 'none';
+applyView();
+
+
+// ---------- voices (Web Speech API) ----------
+const VX = { on: false, q: [], busy: false, voices: [], all: [], map: {}, waiters: [], mute: false };
+let VCFG = store.get('mafia-voicecfg') || {}; // your own picks: { seat: { voice, pitch, rate } }; a seat with nothing here keeps its automatic voice
+function vxLoad(){ if (!window.speechSynthesis) return; const all = speechSynthesis.getVoices(); const en = all.filter(v => /^en/i.test(v.lang)); VX.voices = (en.length ? en : all).slice().sort((a, b) => a.name.localeCompare(b.name)); VX.all = all.slice().sort((a, b) => a.name.localeCompare(b.name)); VX.map = {}; }
+function vxPick(name){
+  if (VX.map[name]) return VX.map[name];
+  let h = 0; for (const c of name) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  // fixed seat -> voice: seats sorted alphabetically (plus the typed-in name), so a seat always gets the same voice as long as the same voices are installed
+  const seats = [...new Set([...(info?.allNames || []), name])].sort((x, y) => x.localeCompare(y));
+  const i = Math.max(0, seats.indexOf(name));
+  const v = VX.voices.length ? VX.voices[i % VX.voices.length] : null;
+  const lap = VX.voices.length ? Math.floor(i / VX.voices.length) : 0; // more seats than voices: the repeat gets a different pitch/rate so it still sounds like a different person
+  const auto = { v, pitch: Math.min(2, 0.75 + ((h >>> 3) % 9) * 0.06 + lap * 0.25), rate: 0.95 + ((h >>> 7) % 5) * 0.04 }, c = VCFG[name] || {};
+  VX.auto = VX.auto || {}; VX.auto[name] = auto;
+  return VX.map[name] = { v: (c.voice && VX.all.find(x => x.name === c.voice)) || auto.v, pitch: typeof c.pitch === 'number' ? c.pitch : auto.pitch, rate: typeof c.rate === 'number' ? c.rate : auto.rate };
+}
+function say(name, text, mafia){
+  if (!VX.on || VX.mute || !window.speechSynthesis) return; // VX.mute: history after a refresh and "show all" in a replay are never read aloud
+  VX.q.push({ name, text: text.replace(/[*_`#]/g, ''), mafia }); vxNext();
+}
+function vxIdle(){ // resolves once everything queued has been spoken (straight away when Voices are off)
+  if (!VX.on || (!VX.busy && !VX.q.length)) return Promise.resolve();
+  return new Promise(res => VX.waiters.push(res));
+}
+function vxDrain(){ if (!VX.busy && !VX.q.length) { const w = VX.waiters; VX.waiters = []; w.forEach(f => f()); } }
+function vxTell(){ if (location.protocol !== 'file:') fetch('/voice', { method: 'POST', body: JSON.stringify({ on: VX.on }) }).catch(() => {}); }
+function vxNext(){
+  if (VX.busy) return; if (!VX.q.length) return vxDrain(); const it = VX.q.shift(), o = vxPick(it.name);
+  const u = new SpeechSynthesisUtterance(it.text); if (o.v) u.voice = o.v; u.pitch = it.mafia ? Math.max(0.5, o.pitch - 0.2) : o.pitch; u.rate = o.rate; u.volume = it.mafia ? 0.7 : 1;
+  let done = false; const fin = () => { if (done) return; done = true; clearTimeout(dog); VX.busy = false; vxNext(); };
+  const dog = setTimeout(() => { try { speechSynthesis.cancel(); } catch {} fin(); }, 6000 + it.text.length * 140); // some browsers never report the end of an utterance
+  VX.busy = true; u.onend = u.onerror = fin; speechSynthesis.speak(u);
+}
+function vxSet(on){ VX.on = on; store.set('mafia-voices', on ? '1' : '0'); $('voiceBtn').textContent = 'Voices: ' + (on ? 'on' : 'off'); if (!on && window.speechSynthesis) { VX.q = []; VX.busy = false; speechSynthesis.cancel(); } if (!on) vxDrain(); vxTell(); }
+// ---- voice settings panel: your own voice / pitch / speed for every seat and for you ("auto" = the default voice) ----
+const vcName = () => me || ($('myName') && $('myName').value.trim()) || 'Milkshake';
+const vcSeats = () => { const mine = vcName(); return [mine, ...[...new Set(info?.allNames || [])].filter(n => n !== mine).sort((a, b) => (DISP[a] || a).localeCompare(DISP[b] || b))]; };
+let MIC = store.get('mafia-mic') || { lang: '', auto: false }, vcTimer = null;
+function vcPush(){ clearTimeout(vcTimer); vcTimer = setTimeout(() => { if (location.protocol !== 'file:') fetch('/voicecfg', { method: 'POST', body: JSON.stringify({ voices: VCFG, mic: MIC }) }).catch(() => {}); }, 250); }
+function vcSave(){ store.set('mafia-voicecfg', VCFG); store.set('mafia-mic', MIC); VX.map = {}; vcPush(); }
+async function vcLoadFile(){ // voice-settings.json next to the game wins over the browser's own copy; a browser copy with no file yet is saved to the file
+  if (location.protocol === 'file:') return;
+  try {
+    const j = await (await fetch('/voicecfg')).json();
+    if (j && j.voices && Object.keys(j.voices).length) { VCFG = j.voices; if (j.mic) MIC = Object.assign(MIC, j.mic); store.set('mafia-voicecfg', VCFG); store.set('mafia-mic', MIC); VX.map = {}; micFill(); }
+    else if (Object.keys(VCFG).length) vcPush();
+  } catch {}
+}
+function vcSpeak(name, text, then){
+  if (!window.speechSynthesis) return then && then(); const o = vxPick(name), u = new SpeechSynthesisUtterance(text);
+  if (o.v) u.voice = o.v; u.pitch = o.pitch; u.rate = o.rate; let done = false; const fin = () => { if (done) return; done = true; then && then(); }; u.onend = u.onerror = fin; setTimeout(fin, 9000);
+  speechSynthesis.speak(u);
+}
+const vcLine = n => `Hello, I am ${DISP[n] || n}. Trust me, I am just a villager.`;
+function vcRender(){
+  const rows = $('vcRows'); rows.innerHTML = ''; const en = $('vcEn').checked, list = en ? VX.voices : VX.all, mine = vcName();
+  $('vcNote').textContent = (window.speechSynthesis ? `${VX.all.length} voices are installed in this browser. ` : 'This browser has no speech voices. ') + 'Your own lines are spoken too, in the voice on the first row. More voices: install them in your operating system (Windows: Settings > Time & language > Speech) and reload the page.';
+  for (const n of vcSeats()) {
+    const c = VCFG[n] || {}, auto = (vxPick(n), VX.auto && VX.auto[n]) || { pitch: 1, rate: 1 }, row = document.createElement('div'); row.className = 'rowf'; row.style.cssText = 'padding:5px 0;border-bottom:1px solid var(--line);gap:8px;flex-wrap:nowrap';
+    const nm = document.createElement('span'); nm.style.cssText = 'width:140px;flex:none;font-weight:600;color:' + colorOf(n); nm.textContent = (DISP[n] || n) + (n === mine ? ' (you)' : '');
+    const sel = document.createElement('select'); sel.style.cssText = 'width:230px;flex:none;'; const o0 = document.createElement('option'); o0.value = ''; const av = VX.auto && VX.auto[n] && VX.auto[n].v; o0.textContent = 'auto: ' + (av ? av.name.replace(/^Microsoft /, '') + ' · ' + av.lang : 'browser default'); sel.append(o0);
+    let have = false; for (const v of list) { const o = document.createElement('option'); o.value = v.name; o.textContent = v.name.replace(/^Microsoft /, '') + ' · ' + v.lang; sel.append(o); if (v.name === c.voice) have = true; }
+    if (c.voice && !have) { const o = document.createElement('option'); o.value = c.voice; o.textContent = c.voice + (VX.all.find(x => x.name === c.voice) ? '' : ' (not installed, using auto)'); sel.append(o); } sel.value = c.voice || '';
+    const mkRange = (label, key, lo, hi, def) => { const w = document.createElement('label'); w.style.cssText = 'display:flex;align-items:center;gap:4px;color:var(--dim)'; const r = document.createElement('input'); r.type = 'range'; r.min = lo; r.max = hi; r.step = 0.05; r.style.width = '80px'; r.value = typeof c[key] === 'number' ? c[key] : def; const t = document.createElement('span'); t.style.cssText = 'width:34px;color:var(--fg)'; t.textContent = (+r.value).toFixed(2); r.oninput = () => { t.textContent = (+r.value).toFixed(2); (VCFG[n] = VCFG[n] || {})[key] = +r.value; vcSave(); }; w.append(label, r, t); return w; };
+    sel.onchange = () => { (VCFG[n] = VCFG[n] || {}).voice = sel.value || undefined; vcSave(); vcSpeak(n, vcLine(n)); };
+    const test = document.createElement('button'); test.className = 'btn'; test.textContent = '▶'; test.title = 'hear it'; test.onclick = () => { try { speechSynthesis.cancel(); } catch {} vcSpeak(n, vcLine(n)); };
+    const rs = document.createElement('button'); rs.className = 'btn'; rs.textContent = 'default'; rs.title = 'back to the default voice for this player'; rs.onclick = () => { delete VCFG[n]; vcSave(); vcRender(); };
+    row.append(nm, sel, mkRange('pitch', 'pitch', 0.5, 2, auto.pitch), mkRange('speed', 'rate', 0.6, 1.6, auto.rate), test, rs); rows.append(row);
+  }
+}
+function vcOpen(){ vxLoad(); $('vcOn').checked = VX.on; vcRender(); $('vcfg').classList.remove('hide'); }
+const MIC_LANGS = ['en-US', 'en-GB', 'en-AU', 'en-CA', 'en-IN', 'en-NZ', 'es-ES', 'es-MX', 'fr-FR', 'de-DE', 'it-IT', 'pt-BR', 'nl-NL', 'ru-RU', 'ja-JP', 'ko-KR', 'zh-CN'];
+function micFill(){ const s = $('micLang'); if (!s.options.length) for (const l of MIC_LANGS) { const o = document.createElement('option'); o.value = l; o.textContent = l; s.append(o); } s.value = MIC.lang && MIC_LANGS.includes(MIC.lang) ? MIC.lang : (MIC_LANGS.includes(navigator.language) ? navigator.language : 'en-US'); $('micSend').checked = MIC.auto === true; }
+$('micLang').onchange = () => { MIC.lang = $('micLang').value; vcSave(); }; $('micSend').onchange = () => { MIC.auto = $('micSend').checked; vcSave(); }; micFill();
+// ---- microphone: click, speak, it becomes your next message ----
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition; let rec = null;
+function micNote(t, ms){ const n = $('micNote'); n.textContent = t; n.classList.toggle('hide', !t); if (t && ms) setTimeout(() => { if (n.textContent === t) { n.textContent = ''; n.classList.add('hide'); } }, ms); }
+function micStop(){ try { rec && rec.stop(); } catch {} }
+function micStart(){
+  if (rec) return micStop();
+  const base = txt.value.trim(); let fin = '', err = '';
+  rec = new SR(); rec.lang = $('micLang').value || 'en-US'; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
+  rec.onstart = () => { $('micBtn').classList.add('rec'); micNote('Listening… speak now', 0); try { speechSynthesis.pause(); } catch {} };
+  rec.onresult = e => { let interim = ''; for (let i = e.resultIndex; i < e.results.length; i++) { const r = e.results[i]; if (r.isFinal) fin += r[0].transcript; else interim += r[0].transcript; } txt.value = (base + ' ' + fin + interim).trim(); };
+  rec.onerror = e => { err = e.error || 'error'; };
+  rec.onend = () => {
+    rec = null; $('micBtn').classList.remove('rec'); try { speechSynthesis.resume(); } catch {}
+    if (err && err !== 'no-speech' && err !== 'aborted') micNote(err === 'not-allowed' || err === 'service-not-allowed' ? 'The microphone is blocked: allow it for this page (lock icon in the address bar) and try again.' : err === 'network' ? 'Speech recognition needs an internet connection (the browser sends the audio to its speech service).' : 'Microphone error: ' + err, 7000);
+    else if (!fin.trim()) micNote(err === 'no-speech' ? 'Did not hear anything.' : '', 3000);
+    else { micNote('', 0); if ($('micSend').checked) send(txt.value, prompting); else txt.focus(); }
+  };
+  try { rec.start(); } catch { rec = null; }
+}
+if (!SR) $('micBtn').classList.add('hide'); else $('micBtn').onclick = micStart;
+$('vcfgBtn').onclick = vcOpen; $('vcClose').onclick = () => { try { speechSynthesis.cancel(); } catch {} $('vcfg').classList.add('hide'); };
+$('vcfg').addEventListener('mousedown', e => { if (e.target === $('vcfg')) $('vcClose').onclick(); });
+$('vcEn').onchange = vcRender; $('vcOn').onchange = () => vxSet($('vcOn').checked);
+$('vcCopy').onclick = async () => { vxLoad(); const en = VX.all.filter(v => /^en/i.test(v.lang)), t = en.map(v => v.name + ' | ' + v.lang + (v.localService ? '' : ' | online')).join('\n') || '(no English voices found)';
+  try { await navigator.clipboard.writeText(t); } catch { const ta = document.createElement('textarea'); ta.value = t; document.body.append(ta); ta.select(); try { document.execCommand('copy'); } catch {} ta.remove(); }
+  $('vcCopy').textContent = 'copied ' + en.length + ' English voices'; setTimeout(() => $('vcCopy').textContent = 'copy English voice list', 2500); };
+$('vcReset').onclick = () => { VCFG = {}; vcSave(); vcRender(); };
+$('vcShuffle').onclick = () => { const vs = VX.voices.slice(); for (let i = vs.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [vs[i], vs[j]] = [vs[j], vs[i]]; } vcSeats().forEach((n, i) => { if (vs.length) (VCFG[n] = VCFG[n] || {}).voice = vs[i % vs.length].name; }); vcSave(); vcRender(); };
+$('vcAll').onclick = () => { try { speechSynthesis.cancel(); } catch {} const q = vcSeats(); const next = () => { const n = q.shift(); if (n) vcSpeak(n, vcLine(n), next); }; next(); };
+vcLoadFile();
+if (!window.speechSynthesis) { $('voiceBtn').classList.add('hide'); $('vcfgBtn').classList.add('hide'); } else { vxLoad(); speechSynthesis.onvoiceschanged = vxLoad; }
+$('voiceBtn').onclick = () => vxSet(!VX.on);
+if (store.get('mafia-voices') === '1') { $('voiceBtn').textContent = 'Voices: click to enable'; $('voiceBtn').onclick = () => (vxSet(true), $("voiceBtn").onclick = () => vxSet(!VX.on)); }
+
+// ---------- memory & therapy (memories are read-only for you: the AI decides what to keep) ----------
+const MEMV = { seats: [], sel: null, limit: 19, busy: false };
+async function memLoad(){
+  try { const r = await fetch('/memory'); const d = await r.json(); MEMV.seats = d.seats; MEMV.limit = d.limit; MEMV.busy = d.busy; } catch { $('memNote').textContent = 'The game server is not reachable (replay-only mode).'; return; }
+  if (!MEMV.sel || !MEMV.seats.some(x => x.name === MEMV.sel)) MEMV.sel = MEMV.seats[0]?.name;
+  memDraw();
+}
+function memDraw(){
+  const box = $('memSeats'); box.innerHTML = '';
+  for (const s of MEMV.seats) { const b = document.createElement('button'); b.className = 'btn'; b.style.cssText = 'display:block;width:100%;text-align:left;margin-bottom:4px;' + (s.name === MEMV.sel ? 'border-color:#6cf' : ''); b.textContent = `${dn(s.name)}  ${s.items.length}/${MEMV.limit}`; b.onclick = () => { MEMV.sel = s.name; TS.text = ''; memDraw(); thDraw(); }; box.append(b); }
+  const s = MEMV.seats.find(x => x.name === MEMV.sel); if (!s) return;
+  $('memNote').textContent = MEMV.busy ? 'A game is running: therapy is paused until it ends.' : `You can read every memory but not edit it. Each seat keeps up to ${MEMV.limit} lessons and chooses what to keep, merge or drop after every game and every session.`;
+  $('memTitle').textContent = `${dn(s.name)}'s memory · ${s.games} game(s) · ${s.model ? s.model.split('/').pop() : ''}`;
+  const it = $('memItems'); it.innerHTML = s.items.length ? '' : '<div class="note">No lessons yet. Play a game or have a chat.</div>';
+  for (const m of s.items) { const d = document.createElement('div'); d.className = 'row'; d.textContent = '• ' + m.text + (m.src === 'chat' ? '  (from a chat)' : ''); if (m.src === 'chat') d.style.color = '#9ad'; it.append(d); }
+  const o = Object.entries(s.others || {}); $('memOthers').textContent = o.length ? 'Remembers about others: ' + o.map(([n, t]) => `${dn(n)}: ${t}`).join('  ·  ') : '';
+}
+const TH = {}; // seat -> [{me, text}]
+const TS = { text: '', until: 0, thinking: false };
+function thDraw(){
+  const box = $('thLog'); box.innerHTML = ''; const h = TH[MEMV.sel] || [];
+  for (const m of h) { const d = document.createElement('div'); d.className = 'row msg'; const w = document.createElement('span'); w.className = 'who'; w.style.color = m.me ? '#6cf' : colorOf(MEMV.sel); w.textContent = (m.me ? 'You' : dn(MEMV.sel)) + ': '; const x = document.createElement('span'); x.className = 't'; x.textContent = m.text; d.append(w, x); box.append(d); }
+  box.scrollTop = box.scrollHeight;
+}
+function thWrap(c, text, maxW){ const out = []; let line = ''; for (const w of String(text).split(/\s+/)) { const t = line ? line + ' ' + w : w; if (c.measureText(t).width > maxW && line) { out.push(line); line = w; } else line = t; } if (line) out.push(line); return out; }
+function thStage(){
+  if (view !== 'memory') return;
+  const c = $('thStage'), W = c.width, H = c.height, now = performance.now(), name = MEMV.sel;
+  const old = cx; cx = c.getContext('2d'); const g2 = cx;
+  g2.clearRect(0, 0, W, H); g2.fillStyle = '#050505'; g2.fillRect(0, 0, W, H);
+  if (name) {
+    const p = { name, alive: true, you: false }, e = getSprite(p), col = e.color || colorOf(name);
+    const grd = g2.createRadialGradient(W / 2, H * 0.45, 10, W / 2, H * 0.45, H * 0.8); grd.addColorStop(0, 'rgba(255,255,255,.07)'); grd.addColorStop(1, 'rgba(0,0,0,0)'); g2.fillStyle = grd; g2.fillRect(0, 0, W, H);
+    g2.save(); g2.globalAlpha = 0.45; g2.fillStyle = col; g2.fillRect(W / 2 - H * 0.36, H * 0.12, H * 0.72, H * 0.62); g2.restore(); // lit panel behind them
+    g2.fillStyle = 'rgba(0,0,0,.35)'; g2.fillRect(W / 2 - H * 0.36, H * 0.12, H * 0.72, H * 0.62);
+    g2.globalAlpha = 0.55; g2.fillStyle = col; g2.fillRect(W / 2 - H * 0.36, H * 0.12, H * 0.72, H * 0.62); g2.globalAlpha = 1;
+    figure(p, W / 2, H * 0.86, H * 0.12, { speaking: now < TS.until, label: false });
+    g2.textAlign = 'center'; g2.textBaseline = 'middle'; g2.fillStyle = '#fff'; g2.font = `600 ${Math.round(H * 0.085)}px system-ui, sans-serif`; g2.shadowColor = '#000'; g2.shadowBlur = 8; g2.fillText(dn(name), W / 2, H * 0.07);
+    g2.font = `500 ${Math.round(H * 0.052)}px system-ui, sans-serif`; g2.shadowBlur = 6;
+    const txt = TS.thinking ? '…' : TS.text; if (txt) { const lines = thWrap(g2, txt, W * 0.86).slice(-3), lh = H * 0.066; lines.forEach((l, i) => g2.fillText(l, W / 2, H - 14 - (lines.length - 1 - i) * lh)); }
+    g2.shadowBlur = 0;
+  }
+  cx = old;
+  requestAnimationFrame(thStage);
+}
+async function thSend(){
+  const name = MEMV.sel, text = $('thTxt').value.trim(); if (!name || !text) return;
+  $('thTxt').value = ''; (TH[name] ||= []).push({ me: true, text }); thDraw(); $('thNote').textContent = ''; TS.thinking = true;
+  try {
+    const r = await (await fetch('/therapy', { method: 'POST', body: JSON.stringify({ name, text }) })).json();
+    if (r.ok && r.reply) { TH[name].push({ text: r.reply }); TS.text = r.reply; TS.until = performance.now() + Math.min(9000, 800 + r.reply.length * 55); $('thNote').textContent = `${r.n}/${r.max} messages` + (r.full ? ' · session full: end it so they can remember' : ''); }
+    else if (r.full) $('thNote').textContent = 'Session is full. End it so they can remember.';
+    else { TH[name].pop(); $('thNote').textContent = r.error || 'Something went wrong.'; }
+  } catch { $('thNote').textContent = 'Could not reach the server.'; }
+  TS.thinking = false; thDraw();
+}
+async function thEnd(){
+  const name = MEMV.sel; if (!name || !(TH[name] || []).length) return; $('thNote').textContent = `${dn(name)} is deciding what to remember…`;
+  try { const r = await (await fetch('/therapy/end', { method: 'POST', body: JSON.stringify({ name }) })).json(); $('thNote').textContent = r.changed ? 'Done. Their lessons are updated below.' : 'Nothing new was worth keeping.'; } catch { $('thNote').textContent = 'Could not reach the server.'; }
+  TH[name] = []; TS.text = ''; thDraw(); memLoad();
+}
+let memPrev = 'lobby';
+$('memBtn').onclick = () => { if (view !== 'memory') memPrev = view; show('memory'); memLoad(); thDraw(); requestAnimationFrame(thStage); };
+$('memBack').onclick = () => show(memPrev === 'memory' ? 'game' : memPrev);
+$('qBtn').onclick = () => { fetch('/input', { method: 'POST', body: JSON.stringify({ clearQueue: true }) }).catch(() => {}); };
+$('thSend').onclick = thSend; $('thEnd').onclick = thEnd; $('thTxt').addEventListener('keydown', e => { if (e.key === 'Enter') thSend(); });
+
+setTone(5); clearPrompt();
+if (location.protocol === 'file:') { $('conn').textContent = 'replay viewer'; show('replays'); $('games').textContent = 'Opened as a file: pick a saved game above (they are in the games folder). To play, start the game with one of the start-…-web.bat files.'; $('backBtn').classList.add('hide'); }
+else connect();
+</script>
+</body>
+</html>

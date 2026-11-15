@@ -1,0 +1,8 @@
+.env
+memory/
+games/
+voice-settings.json
+skin.png
+skin.json
+node_modules/
+*.log
