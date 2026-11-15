@@ -432,6 +432,7 @@ const FAILS = {}; // consecutive failed calls per model
 const inPlay = () => [...new Set(players.filter(q => !q.human).map(q => q.model))];
 // When a model fails, its calls go to ONE fixed fallback model (default openai/gpt-oss-120b; --fallback slug to change, --fallback none to turn off).
 const FALLBACK = args.fallback === 'none' ? null : (typeof args.fallback === 'string' && args.fallback ? args.fallback : 'openai/gpt-oss-120b');
+const SCRIBE = args.scribe === 'none' ? null : (typeof args.scribe === 'string' && args.scribe ? args.scribe : FALLBACK); // writes a seat's lessons when its own model fails at it (--scribe slug / --scribe none)
 const otherModel = m => (FALLBACK && m !== FALLBACK ? FALLBACK : null);
 const liveModel = m => ((FAILS[m] || 0) >= 2 ? (otherModel(m) || m) : m); // after 2 failures in a row, that model's seats use the fallback for the rest of the game
 const avgMs = m => (STATS[m] ? STATS[m].ms / STATS[m].calls : Infinity);
@@ -1011,7 +1012,9 @@ async function updateMemories() {
     const out = await llm(p.model, sys(p), `${ctx(p)}\n\nDay ${g.night} is over. Rewrite your PRIVATE notes for yourself (nobody else ever sees them): who you suspect or trust and why, lies or odd votes you noticed, and your plan for tomorrow. Keep what still matters from your old notes. Max 45 words, plain text, no JSON, no name prefix.`, {
       maxTokens: 90, temp: 0.5, mock: () => `I suspect ${pick(p).name}. Watch who voted with them tomorrow.`,
     });
-    const t = String(out || '').split(/PUBLIC LOG|\n{2,}/)[0].replace(/[*`#]+/g, '').replace(/\s+/g, ' ').trim().slice(0, 320);
+    const clean0 = o => String(o || '').split(/PUBLIC LOG|\n{2,}/)[0].replace(/[*`#]+/g, '').replace(/\s+/g, ' ').trim().slice(0, 320);
+    let t = clean0(out);
+    if ((!t || t === '...' || OFFCHAR.test(t)) && SCRIBE && SCRIBE !== p.model) t = clean0(await llm(SCRIBE, sys(p), `${ctx(p)}\n\nDay ${g.night} is over. Rewrite your PRIVATE notes for yourself (nobody else ever sees them): who you suspect or trust and why, lies or odd votes you noticed, and your plan for tomorrow. Max 45 words, plain text, no JSON, no name prefix.`, { maxTokens: 90, temp: 0.5, mock: () => '' })); // own model gave nothing: the scribe writes tonight's notes
     if (!t || t === '...' || OFFCHAR.test(t)) return; // keep the old notes if the model gave nothing usable
     p.memory = t;
     const line = `[Notes ${p.name}] ${t}`;
@@ -1058,9 +1061,24 @@ async function learnFromGame(win) {
     const m = loadLT(p.name) || emptyLT(p.name); m.games++;
     const mafiaPart = isMafia(p) ? `\n\nYOUR TEAM'S PRIVATE CHAT:\n${g.mafiaLog.slice(-14).join('\n')}` : '';
     const context = `The Mafia game has just ended. RESULT: ${winText(win)} won. ROLES: ${reveal}. You were ${p.role}.\n\nPUBLIC LOG (end of game):\n${pubLines}${mafiaPart}`;
-    const ok = await curate(m, context, 'game', user => llm(p.model, `You are ${p.name}, a player in a Mafia game that has just ended. You keep a private long-term memory that you read before every future game. Be honest and concrete.`, user, { json: true, maxTokens: 350, temp: 0.3, mock: () => JSON.stringify({ add: [`As ${p.role}, stay consistent.`], drop: [], merge: [], others: { [pick(p)?.name || 'x']: 'Pushed votes early.' } }) }), names);
-    if (!ok) return; // unusable answer: the old memory stays
-    const line = `[Learned ${p.name}] ${m.items.length}/${MEM_LIMIT} lessons. Newest: ${m.items.filter(it => it.src === 'game').slice(-2).map(it => it.text).join(' | ')}`;
+    const raws = [], snap = () => m.items.length + '|' + JSON.stringify(m.others), sh = x => String(x).split('/').pop();
+    const mkCall = (model, system) => async user => { const t = await llm(model, system, user, { json: true, maxTokens: 350, temp: 0.3, mock: () => JSON.stringify({ add: [`As ${p.role}, stay consistent.`], drop: [], merge: [], others: { [pick(p)?.name || 'x']: 'Pushed votes early.' } }) }); raws.push(String(t || '')); return t; };
+    const sysOwn = `You are ${p.name}, a player in a Mafia game that has just ended. You keep a private long-term memory that you read before every future game. Be honest and concrete.`;
+    const sysScribe = `You are writing the private long-term memory of ${p.name}, a player in a Mafia game that has just ended, in ${p.name}'s own first-person voice. ${p.name}'s own model could not do it. Be honest and concrete.`;
+    const before = snap();
+    let ok = await curate(m, context, 'game', mkCall(p.model, sysOwn), names), by = p.model;
+    const unchanged = ok && snap() === before;
+    if ((!ok || (unchanged && !m.items.length)) && SCRIBE && SCRIBE !== p.model) { // own model failed (or never wrote anything at all): a second model writes for this seat
+      const ok2 = await curate(m, context, 'game', mkCall(SCRIBE, sysScribe), names);
+      if (ok2) { ok = true; by = SCRIBE; }
+    }
+    if (!ok) {
+      const got = raws.find(r => r.trim()) || '', fl = `[Memory FAILED ${p.name}] ${sh(p.model)}${SCRIBE && SCRIBE !== p.model ? ' and ' + sh(SCRIBE) : ''} gave nothing usable: ${got ? JSON.stringify(got.replace(/\s+/g, ' ').slice(0, 140)) : '(empty reply)'}`;
+      console.log(C.red('  ' + fl)); g.transcript.push({ t: 'notes', who: p.name, line: fl }); webEmit({ t: 'line', text: C.red(fl), kind: 'notes' });
+      return; // the old memory stays
+    }
+    if (snap() === before) { const nl = `[Learned ${p.name}] nothing new from ${sh(by)}`; console.log(C.dim('  ' + nl)); g.transcript.push({ t: 'notes', who: p.name, line: nl }); webEmit({ t: 'line', text: C.dim(nl), kind: 'notes' }); return; }
+    const line = `[Learned ${p.name}${by !== p.model ? ` (written by ${sh(by)}, ${sh(p.model)} failed)` : ''}] ${m.items.length}/${MEM_LIMIT} lessons. Newest: ${m.items.filter(it => it.src === 'game').slice(-2).map(it => it.text).join(' | ')}`;
     g.transcript.push({ t: 'notes', who: p.name, line });
     webEmit({ t: 'line', text: C.dim(line), kind: 'notes' });
   };
