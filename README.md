@@ -58,7 +58,7 @@ Set `COMMONSTACK_API_KEY` or `OPENROUTER_API_KEY` in your environment or in a `.
 ```
 
 - `prices` is USD per 1M tokens, `[input, output]`, used only for the cost estimate.
-- `models.example.json` shows the shape with placeholders. Copy it to `models.json` and fill in slugs that exist on your provider.
+- The `models.json` in this repo is a working Commonstack setup (public model slugs only, no keys). Edit it to change which model plays which seat. `models.example.json` shows the full shape for both providers, including OpenRouter, which you must fill in with real slugs.
 - Run `node mafia.mjs --commonstack --check` to test every slug before a game.
 - If a model fails twice in a row, its seats fall back to `openai/gpt-oss-120b` (change with `--fallback slug`, or `--fallback none`).
 
