@@ -112,8 +112,9 @@ async function curate(m, context, src, callFn, validNames) {
   const hadJunk = j && typeof j === 'object' && ((Array.isArray(j.add) && j.add.length) || (j.others && Object.keys(j.others).length));
   if ((!j || (hadJunk && !usable(j)))) j = pj(await callFn(user + '\n\nYour previous answer was unreadable (dots or empty text). Answer again in plain complete sentences, no ellipses. If you truly have nothing to add, use empty lists.')) || j; // one retry
   if (!j || typeof j !== 'object') return false;
-  const pinned = new Set(m.items.filter(it => it.pin).map(it => it.id));
+  const pinned = new Set(m.items.filter(it => it.pin).map(it => it.id)), nid0 = m.nextId;
   const drop = new Set((Array.isArray(j.drop) ? j.drop : []).map(String).filter(id => !pinned.has(id)));
+  const dropped = m.items.filter(it => drop.has(it.id));
   m.items = m.items.filter(it => !drop.has(it.id));
   for (const mg of Array.isArray(j.merge) ? j.merge : []) {
     const ids = (Array.isArray(mg?.ids) ? mg.ids : []).map(String).filter(id => !pinned.has(id) && m.items.some(it => it.id === id)); const t = fit(mg?.text, 170);
@@ -121,6 +122,7 @@ async function curate(m, context, src, callFn, validNames) {
     m.items = m.items.filter(it => !ids.includes(it.id)); m.items.push({ id: 'm' + m.nextId++, text: t, pin: false, src, g: m.games });
   }
   for (const t0 of Array.isArray(j.add) ? j.add : []) { const t = fit(t0, 170); if (t && sane(t) && whole(t) && !MEM_BAD.test(t) && !m.items.some(it => it.text.toLowerCase() === t.toLowerCase())) m.items.push({ id: 'm' + m.nextId++, text: t, pin: false, src, g: m.games }); }
+  if (m.nextId === nid0 && dropped.length) m.items = [...m.items, ...dropped].sort((a, b) => +a.id.slice(1) - +b.id.slice(1)); // a lesson only leaves when it is replaced or merged: a drop with nothing new written is ignored
   while (m.items.length > MEM_LIMIT) { const cand = m.items.filter(it => !it.pin).sort((a, b) => a.g - b.g || +a.id.slice(1) - +b.id.slice(1))[0]; if (!cand) break; m.items = m.items.filter(it => it !== cand); } // safety net: oldest unpinned goes
   for (const [n, t] of Object.entries(j.others && typeof j.others === 'object' ? j.others : {})) if (n !== m.name && (!validNames || validNames.includes(n)) && sane(t)) m.others[n] = clip(t, 150);
   const keys = Object.keys(m.others); if (keys.length > 16) for (const k of keys.slice(0, keys.length - 16)) delete m.others[k];
@@ -416,7 +418,7 @@ async function llm(model, system, user, { json = false, maxTokens = 100, temp = 
     if (!out) {
       FAILS[model] = (FAILS[model] || 0) + 1;
       const alt = otherModel(model);
-      if (FAILS[model] === 2 && alt) console.log(C.yel(`  ⚠ ${model} keeps failing — its seats will use the fallback ${alt} for the rest of the game`));
+      if (FAILS[model] === 2 && alt) { const fl = `[Switched to fallback] ${model} keeps failing (last error: ${LASTERR[model] || 'no answer / timeout'}), so its seats use ${alt} for the rest of the game`; console.log(C.yel(`  ⚠ ${fl}`)); try { g.transcript.push({ t: 'notes', who: 'system', line: fl }); webEmit({ t: 'line', text: C.yel(fl), kind: 'notes' }); } catch {} }
       if (alt) { s = {}; out = await llmRemote(alt, system, user, { json, maxTokens, temp }, s); model = alt; }
     } else FAILS[model] = 0;
   }
@@ -456,6 +458,7 @@ let PRICES = {}; try { PRICES = JSON.parse(fs.readFileSync(new URL('./models.jso
 // --think low: ask reasoning models to think less (cheaper and faster). Off by default. Sent in several common spellings; a model or gateway that rejects them is retried without.
 const THINK = args.think === 'low' || args.think === 'minimal' || args.think === 'off' ? String(args.think) : '';
 const thinkExtras = model => { const o = {}; if (!THINK || /^openai\//.test(model)) return o; o.reasoning_effort = THINK === 'off' ? 'minimal' : THINK; if (/glm|zai|kimi|moonshot/i.test(model)) o.thinking = { type: THINK === 'off' ? 'disabled' : 'enabled' }; if (/qwen/i.test(model)) o.enable_thinking = false; return o; };
+const NOEXTRAS = new Set(), LASTERR = {}; // models that failed with the --think settings (they are sent without them from then on) / the last error text per model
 const REQUEST_TIMEOUT_MS = (+args.timeout || 68) * 1000; // --timeout 60 to allow slower models
 // OpenAI-compatible cloud call (OpenRouter / Commonstack)
 async function llmRemote(model, system, user, { json, maxTokens, temp }, stats = {}) {
@@ -466,15 +469,16 @@ async function llmRemote(model, system, user, { json, maxTokens, temp }, stats =
   if (PROVIDER === 'openrouter') { body.reasoning = { enabled: false }; body.usage = { include: true }; }
   const efforts = ['minimal', 'low']; // reasoning_effort values to try, in order
   if (/^openai\//.test(model)) body.reasoning_effort = efforts.shift();
-  const extras = THINK && PROVIDER !== 'openrouter' ? thinkExtras(model) : {}; Object.assign(body, extras); // --think low
-  const dropExtras = () => { let had = false; for (const k of Object.keys(extras)) if (k in body) { delete body[k]; had = true; } return had; };
+  const extras = THINK && PROVIDER !== 'openrouter' && !NOEXTRAS.has(model) ? thinkExtras(model) : {}; Object.assign(body, extras); // --think low
+  const dropExtras = () => { let had = false; for (const k of Object.keys(extras)) if (k in body) { delete body[k]; had = true; } if (had) NOEXTRAS.add(model); return had; };
   for (let attempt = 0; attempt < 5; attempt++) {
     try {
       const headers = { 'content-type': 'application/json', authorization: `Bearer ${API_KEY}` };
       if (PROVIDER === 'openrouter') headers['X-Title'] = 'AI Mafia';
       const r = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
       if (!r.ok) {
-        const t = await r.text();
+        const t = await r.text(); LASTERR[model] = `HTTP ${r.status} ${t.replace(/\s+/g, ' ').slice(0, 110)}`;
+        if (r.status >= 500 && attempt === 0 && dropExtras()) { vlog(`  ↻ ${model} returned HTTP ${r.status} with the --think settings, trying once without them`); continue; } // some gateways answer 500 (not 400) to a setting a model does not support
         if (r.status === 400 && /role|developer/i.test(t) && !NO_SYSTEM.has(model)) { NO_SYSTEM.add(model); body.messages = merged; vlog(`  ↻ ${model} rejects the system role, sending instructions inside the user message instead`); continue; }
         if (r.status === 400 && body.response_format && /response_format|json/i.test(t)) { delete body.response_format; continue; } // model has no JSON mode
         if (r.status === 400 && dropExtras() && !/response_format|role|developer/i.test(t)) { vlog(`  ↻ ${model} rejects the --think settings, sending without them`); continue; }
@@ -1081,7 +1085,7 @@ async function learnFromGame(win) {
       console.log(C.red('  ' + fl)); g.transcript.push({ t: 'notes', who: p.name, line: fl }); webEmit({ t: 'line', text: C.red(fl), kind: 'notes' });
       return; // the old memory stays
     }
-    if (snap() === before) { const nl = `[Learned ${p.name}] nothing new from ${sh(by)}`; console.log(C.dim('  ' + nl)); g.transcript.push({ t: 'notes', who: p.name, line: nl }); webEmit({ t: 'line', text: C.dim(nl), kind: 'notes' }); return; }
+    if (snap() === before) { const nl = `[Learned ${p.name}] nothing new from ${sh(by)}${!m.items.length ? ` (it answered: ${JSON.stringify(String(raws[raws.length - 1] || '(empty)').replace(/\s+/g, ' ').slice(0, 160))})` : ''}`; console.log(C.dim('  ' + nl)); g.transcript.push({ t: 'notes', who: p.name, line: nl }); webEmit({ t: 'line', text: C.dim(nl), kind: 'notes' }); return; }
     const line = `[Learned ${p.name}${by !== p.model ? ` (written by ${sh(by)}, ${sh(p.model)} failed)` : ''}] ${m.items.length}/${MEM_LIMIT} lessons. Newest: ${m.items.filter(it => it.src === 'game').slice(-2).map(it => it.text).join(' | ')}`;
     g.transcript.push({ t: 'notes', who: p.name, line });
     webEmit({ t: 'line', text: C.dim(line), kind: 'notes' });
