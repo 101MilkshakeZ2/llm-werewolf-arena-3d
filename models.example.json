@@ -1,5 +1,5 @@
 {
-  "_note": "Copy this file to models.json and replace the slugs with ones that exist on your provider. Seat names must match the files in sprites/.",
+  "_note": "Copy this file to models.json and replace the slugs with ones that exist on your provider. Seat names must match the files in sprites/. Optional per provider: \"display\" (seat -> name shown in the browser) and \"fallback\" (model a failing seat moves to).",
   "commonstack": {
     "standard": {
       "Claude-Sonnet": "provider/model-slug",
@@ -66,6 +66,10 @@
       "Grok": "provider/model-slug",
       "Muse": "provider/model-slug",
       "Mistral": "provider/model-slug"
+    },
+    "fallback": "openai/gpt-oss-120b",
+    "display": {
+      "Gemini-Flash": "Gemini 4 Hydrogen"
     }
   },
   "prices": {

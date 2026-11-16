@@ -92,7 +92,7 @@
   // ---------- a player: blocky figure, face on the front AND back of the head, plus its soul and headstone ----------
   const stoneMat = std(0x8a9099, { roughness: 1 }), plotMat = std(0x3a3128);
   function makeFigure(name) {
-    const g = new THREE.Group(), body = new THREE.Group(), ai = new THREE.Group(); g.add(body); body.add(ai); // ai = the AI body; a Minecraft-skin body can sit next to it (buildSteve)
+    const g = new THREE.Group(), body = new THREE.Group(), ai = new THREE.Group(); g.add(body); body.add(ai); // ai = the AI body; your Minecraft-skin body (buildSteve) or a robot (setRobot) can sit next to it
     const mT = std(0x888888), mA = std(0x888888), mL = std(0x555555), mS = std(0x888888), mShoe = std(0x22252b);
     const face = [new THREE.MeshStandardMaterial({ roughness: 0.8 }), new THREE.MeshStandardMaterial({ roughness: 0.8 })];
     box(ai, 0.45 * U, 0.75 * U, 0.5 * U, mL, -0.26 * U, 0.53 * U, 0); box(ai, 0.45 * U, 0.75 * U, 0.5 * U, mL, 0.26 * U, 0.53 * U, 0);
@@ -153,29 +153,40 @@
     root.visible = false; f.steve = root; f.sArms = arms; f.sNeck = neck; f.skinOn = false;
     f.steveDispose = () => { tex.dispose(); mat.dispose(); root.traverse(o => o.geometry && o.geometry.dispose()); };
   }
-  // A Minecraft skin made from a player's sprite and colour, for players with no skin file: classic arms, torso in their colour, the sprite as the face (front and back).
-  function genSkin(e, hex) {
-    const cv = document.createElement('canvas'); cv.width = cv.height = 64; const g = cv.getContext('2d'); g.imageSmoothingEnabled = true;
-    const c = new THREE.Color(hex), sh = k => '#' + c.clone().multiplyScalar(k).getHexString();
-    const fill = (col, x, y, w, h) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
-    fill(sh(0.6), 0, 0, 32, 16);                                                    // head: hair-coloured sides and top
-    for (const x of [8, 24]) { if (e && e.ok && e.img) g.drawImage(e.img, x, 8, 8, 8); else fill(sh(1), x, 8, 8, 8); } // face on the front and the back
-    fill(sh(1), 16, 16, 24, 16);                                                    // torso
-    fill(sh(0.82), 40, 16, 16, 16); fill(sh(0.82), 32, 48, 16, 16);                 // arms
-    fill(sh(0.42), 0, 16, 16, 16); fill(sh(0.42), 16, 48, 16, 16);                  // legs
-    return cv;
+  // ---------- robot bodies (robots3d.js): the "gizmo" style. The model file loads once; until it has loaded
+  // (or if it can't, e.g. when the page is opened as a file), players keep the default AI body. ----------
+  const ROBOT_STYLES = { gizmo: 'gizmo' }; // body style -> robot design in robots3d.js
+  let gizmoState = 'idle'; // idle | loading | ready | failed
+  function robotReady(kind) {
+    if (!window.Robots || kind !== 'gizmo') return false;
+    if (gizmoState === 'idle') { gizmoState = 'loading'; Robots.loadGizmo().then(() => { gizmoState = 'ready'; }, err => { gizmoState = 'failed'; console.warn('Gizmo body unavailable, using the default body:', err.message); }); }
+    return gizmoState === 'ready';
   }
-  // Body styles besides "default". Add a third style here AND its name to BODIES in index.html. A style says what to show for a player: { key, img } (a skin) or null (the normal AI body).
-  const ALT_STYLES = {
-    minecraft: (p, h, e) => {
-      const sk = h.skin; if (p.you && sk && sk.on && sk.img) return { key: 'me:' + sk.ver, img: sk.img }; // your own uploaded skin always wins
-      const own = h.aiSkin && h.aiSkin(p); if (own) return { key: 'file:' + own.src, img: own };
-      const col = e.color || h.colorOf(p.name); return { key: 'gen:' + col + ':' + (e.ok && e.img ? e.img.src : '-'), make: () => genSkin(e, col) };
-    },
-  };
-  function bodyFor(p, h, e) { // what this player wears right now
-    const sk = h.skin; if (p.you && sk && sk.on && sk.img) return ALT_STYLES.minecraft(p, h, e); // your skin toggle works in any style
-    const st = ALT_STYLES[h.bodies]; return st ? st(p, h, e) : null;
+  function setRobot(f, kind, p, h, e, hex) { // kind = robot design to show, or null for none
+    if (f.robot && (!kind || f.robot.kind !== kind)) { f.body.remove(f.robot.group); f.robot.dispose(); f.robot = null; f.robotCol = f.robotLogo = ''; }
+    if (!kind) return;
+    if (!f.robot) {
+      f.robot = Robots.build(kind, { height: 3.15 * U * TALL, color: hex, phase: f.ph });
+      f.robot.group.scale.y = 1 / TALL; // the body group is stretched by TALL; robots keep their own proportions
+      f.robot.group.traverse(o => { if (o.isMesh) o.castShadow = o.receiveShadow = true; });
+      f.body.add(f.robot.group);
+    }
+    if (f.robotCol !== hex) { f.robotCol = hex; f.robot.setColor(hex); }
+    const useImg = e.ok && e.img && !IS_FILE, key = useImg ? e.img.src : 'init:' + h.initials(p);
+    if (f.robotLogo !== key) { f.robotLogo = key; f.robot.setLogoSource(useImg ? e.img : h.initials(p), { bg: hex }); }
+  }
+  function setRobotMode(f, on) {
+    on = on && !!f.robot; if (f.robotOn === on) return; f.robotOn = on;
+    f.robot && (f.robot.group.visible = on);
+    if (on) { f.ai.visible = false; if (f.steve) f.steve.visible = false; f.skinOn = false; f.arms = f.robot.arms; f.neck = f.robot.neck; }
+    else { f.ai.visible = true; f.arms = f.aArms; f.neck = f.aNeck; }
+  }
+  // The Minecraft skin a player wears, or null (= the normal AI body, or a robot). Your own uploaded skin wins in any style.
+  // With "Bodies: Minecraft", a player wears one only if skins/<their name>.png exists; everyone else stays a normal AI body.
+  function bodyFor(p, h) {
+    const sk = h.skin; if (p.you && sk && sk.on && sk.img) return { key: 'me:' + sk.ver, img: sk.img };
+    if (h.bodies !== 'minecraft') return null;
+    const own = h.aiSkin && h.aiSkin(p); return own ? { key: 'file:' + own.src, img: own } : null;
   }
   function setSkinMode(f, on) {
     if (!f.steve) on = false; if (f.skinOn === on) return; f.skinOn = on;
@@ -542,9 +553,13 @@
       const tex = faceTex(p, h), e = h.getSprite(p);
       setMap(f.face[0], tex); setMap(f.face[1], tex); setMap(f.soulMat, tex); setMap(f.carve, tex);
       colourFigure(f, e.color || h.colorOf(p.name));
-      const wear = bodyFor(p, h, e), wantSkin = !!wear;
-      if (wear && f.skinVer !== wear.key) { f.skinVer = wear.key; try { buildSteve(f, wear.img || wear.make()); } catch (err) { console.warn('skin failed:', err); } }
+      const wear = bodyFor(p, h), wantSkin = !!wear;
+      const robotKind = !wantSkin && ROBOT_STYLES[h.bodies] && robotReady(ROBOT_STYLES[h.bodies]) ? ROBOT_STYLES[h.bodies] : null;
+      if (wear && f.skinVer !== wear.key) { f.skinVer = wear.key; try { buildSteve(f, wear.img); } catch (err) { console.warn('skin failed:', err); } }
+      if (f.robotOn && !robotKind) setRobotMode(f, false); // leave robot mode before the skin/default switch below
       setSkinMode(f, wantSkin);
+      try { setRobot(f, robotKind, p, h, e, e.color || h.colorOf(p.name)); } catch (err) { console.warn('robot body failed:', err); }
+      setRobotMode(f, !!robotKind);
       const st = place[p.name];
       if (!st) { f.g.visible = false; p._on = false; continue; }
       if (f.set !== name) { st.snap = true; f.set = name; }
