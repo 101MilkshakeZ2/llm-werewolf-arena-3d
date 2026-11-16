@@ -6,3 +6,6 @@ skin.png
 skin.json
 node_modules/
 *.log
+
+# download bundles made for the user (the zip of this repo), never committed
+*.zip
