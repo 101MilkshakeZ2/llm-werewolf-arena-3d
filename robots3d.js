@@ -245,6 +245,7 @@
         const pos = new Float32Array(nv * 3), pv = pivots[gI] || [0, 0, 0];
         for (let v = 0; v < nv; v++) for (let k = 0; k < 3; k++) pos[v * 3 + k] = lo[k] + q[v * 3 + k] / 65535 * span[k] - pv[k];
         const g = new T.BufferGeometry(); g.setAttribute('position', new T.BufferAttribute(pos, 3)); g.setIndex(new T.BufferAttribute(idx, 1)); g.computeVertexNormals();
+        g.userData.shared = true; // one copy for every Gizmo: never disposed with a single robot
         geos.push(g);
       }
       return geos;
@@ -339,8 +340,9 @@
       },
       update: (t, speaking) => parts.update(t, !!speaking, ph),
       dispose: () => {
-        g.traverse(o => o.geometry && o.geometry.dispose());
+        g.traverse(o => o.geometry && !o.geometry.userData.shared && o.geometry.dispose());
         for (const key of Object.keys(M)) if (M[key] && M[key].isMaterial) M[key].dispose();
+        for (const m of [M.logo, M.logoRound]) if (m.map) m.map.dispose();
       },
     };
     // the round badge gets its own round-cropped copy of the logo

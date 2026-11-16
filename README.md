@@ -12,7 +12,7 @@ Runs on [Commonstack](https://commonstack.ai), [OpenRouter](https://openrouter.a
 - **Play too.** Take a seat as "Milkshake" (or any name). The AIs are never told a human is playing, and your text is tidied so you don't stand out. Optional Minecraft skin for your own figure.
 - **Raffle conversation.** After every message everyone drafts a reply with an urgency from 1 to 10, and a weighted draw picks who speaks. Next drafts are written while the winner is being spoken.
 - **Long-term memory.** After each game every seat rewrites its own list of lessons and notes on other players' tactics.
-- **Body styles.** A **Bodies** button switches every player between the Default AI body and a Minecraft body. Put skins in `skins/` named after the player (`skins/README.txt` explains); players without one get a skin generated from their sprite. More styles can be added later in `town3d.js` (`ALT_STYLES`).
+- **Body styles.** A **Bodies** button switches every player between three styles: **Default** (the AI body), **Minecraft** (only players with a skin in `skins/`, named after the player, get one; everyone else keeps the AI body; `skins/README.txt` explains) and **Gizmo** (a jointed robot in the player's colour with their logo on round badges). `/robots` previews Gizmo and the other robot designs in `robots3d.js`.
 - **Voices and mic.** Browser text-to-speech for every player with per-player voice settings, and optional speech-to-text for your own lines (Chrome/Edge).
 - **Replays and trash talk.** Every game is saved. After the game everyone speaks once about their real role.
 - **Cost estimate.** Prices in `models.json` give an estimated cost per model and per game in the end summary. `--think low` cuts reasoning tokens.
@@ -100,9 +100,12 @@ Set `COMMONSTACK_API_KEY` or `OPENROUTER_API_KEY` in your environment or in a `.
 mafia.mjs        game server (Node, no dependencies)
 index.html       browser UI
 town3d.js        3D town
+robots3d.js      robot player bodies (Gizmo and four more designs)
+robots.html      robot preview page (http://localhost:3000/robots)
+models/          Gizmo's 3D model
+skins/           optional Minecraft skins per player (see skins/README.txt)
 three.min.js     three.js (MIT)
 sprites/         one image per player; file name = player name
-skins/           optional Minecraft skins per player (see skins/README.txt)
 games/           saved replays (git-ignored)
 memory/          AI lessons between games (git-ignored)
 ```
