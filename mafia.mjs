@@ -431,10 +431,14 @@ async function llm(model, system, user, { json = false, maxTokens = 100, temp = 
   if (PROVIDER && !noFailover) { // a model that keeps failing hands its calls to the other model so the game keeps moving
     if (!out) {
       FAILS[model] = (FAILS[model] || 0) + 1;
+      if (FAILS[model] >= 2) DOWNAT[model] = Date.now(); // (re)start the cooldown before the next probe
       const alt = otherModel(model);
-      if (FAILS[model] === 2 && alt) { const fl = `[Switched to fallback] ${model} keeps failing (last error: ${LASTERR[model] || 'no answer / timeout'}), so its seats use ${alt} for the rest of the game`; console.log(C.yel(`  ⚠ ${fl}`)); try { g.transcript.push({ t: 'notes', who: 'system', line: fl }); webEmit({ t: 'line', text: C.yel(fl), kind: 'notes' }); } catch {} }
+      if (FAILS[model] === 2 && alt) { const fl = `[Switched to fallback] ${model} keeps failing (last error: ${LASTERR[model] || 'no answer / timeout'}), so its seats use ${alt} for now (it gets tried again every ${Math.round(COOLDOWN/1000)}s)`; console.log(C.yel(`  ⚠ ${fl}`)); try { g.transcript.push({ t: 'notes', who: 'system', line: fl }); webEmit({ t: 'line', text: C.yel(fl), kind: 'notes' }); } catch {} }
       if (alt) { s = {}; out = await llmRemote(alt, system, user, { json, maxTokens, temp }, s); model = alt; }
-    } else FAILS[model] = 0;
+    } else {
+      if ((FAILS[model] || 0) >= 2) { const rl = `[Recovered] ${model} answers again, so its seats are back on it`; console.log(C.yel(`  ✓ ${rl}`)); try { g.transcript.push({ t: 'notes', who: 'system', line: rl }); webEmit({ t: 'line', text: C.yel(rl), kind: 'notes' }); } catch {} }
+      FAILS[model] = 0;
+    }
   }
   const ms = Date.now() - t0;
   const st = (STATS[model] ||= { calls: 0, ms: 0, load: 0, inp: 0, out: 0, evalMs: 0, slowest: 0, cost: 0 });
@@ -448,13 +452,14 @@ async function llm(model, system, user, { json = false, maxTokens = 100, temp = 
 const VERBOSE = !!args.verbose; // --verbose: show helper calls + retry chatter; default screen shows only messages, votes and their timings
 const STATS = {}, TIMING = !(args['no-timing'] || args.quiet), GAME_T0 = Date.now();
 const vlog = t => { if (VERBOSE) console.log(C.dim(t)); };
+const DOWNAT = {}, COOLDOWN = +process.env.MAFIA_COOLDOWN_MS || 60000; // when a model went down; after the cooldown one call probes it again
 const FAILS = {}; // consecutive failed calls per model
 const inPlay = () => [...new Set(players.filter(q => !q.human).map(q => q.model))];
 // When a model fails, its calls go to ONE fixed fallback model (default openai/gpt-oss-120b; --fallback slug to change, --fallback none to turn off).
 const FALLBACK = args.fallback === 'none' ? null : (typeof args.fallback === 'string' && args.fallback ? args.fallback : 'openai/gpt-oss-120b');
 const SCRIBE = args.scribe === 'none' ? null : (typeof args.scribe === 'string' && args.scribe ? args.scribe : FALLBACK); // writes a seat's lessons when its own model fails at it (--scribe slug / --scribe none)
 const otherModel = m => (FALLBACK && m !== FALLBACK ? FALLBACK : null);
-const liveModel = m => ((FAILS[m] || 0) >= 2 ? (otherModel(m) || m) : m); // after 2 failures in a row, that model's seats use the fallback for the rest of the game
+const liveModel = m => ((FAILS[m] || 0) >= 2 && Date.now() - (DOWNAT[m] || 0) < COOLDOWN ? (otherModel(m) || m) : m); // after 2 failures in a row the fallback covers that model; after a 60s cooldown the next call tries it again (success = recovered)
 const avgMs = m => (STATS[m] ? STATS[m].ms / STATS[m].calls : Infinity);
 // Model for the many tiny "how much do I want to speak" calls: --helper slug, else a cheap-looking model from the rotation, fastest first.
 // (A model picked for one seat only, e.g. an expensive one you are trying out, never takes the helper calls.)
