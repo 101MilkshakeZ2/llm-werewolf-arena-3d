@@ -20,11 +20,12 @@ for (let i = 2; i < process.argv.length; i++) {
 }
 const HOST = process.env.OLLAMA_HOST?.startsWith('http') ? process.env.OLLAMA_HOST : 'http://localhost:11434';
 // Cloud mode: --openrouter or --commonstack (OpenAI-compatible APIs). Key comes from env var or a .env file next to this script.
-const PROVIDER = args.openrouter ? 'openrouter' : args.commonstack ? 'commonstack' : null;
+const PROVIDER = args.openrouter ? 'openrouter' : args.commonstack ? 'commonstack' : (typeof args['api-url'] === 'string' && args['api-url']) ? 'custom' : null; // --api-url <url>: any OpenAI-compatible service (Together, Groq, Fireworks, a local server...)
 const PROVIDERS = {
   openrouter: { url: 'https://openrouter.ai/api/v1/chat/completions', keyVar: 'OPENROUTER_API_KEY' },
   commonstack: { url: 'https://api.commonstack.ai/v1/chat/completions', keyVar: 'COMMONSTACK_API_KEY' },
 };
+if (PROVIDER === 'custom') PROVIDERS.custom = { url: args['api-url'], keyVar: typeof args['api-key-env'] === 'string' && args['api-key-env'] ? args['api-key-env'] : 'CUSTOM_API_KEY' }; // key from that environment variable or .env; models go in models.json under "custom" or --models a,b,c
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let API_KEY = '';
 let MODEL_MAP = {}; // per-AI model slugs from models.json
