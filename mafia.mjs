@@ -483,6 +483,9 @@ const THINK = args.think === 'low' || args.think === 'minimal' || args.think ===
 const thinkExtras = model => { const o = {}; if (!THINK || /^~?openai\//.test(model)) return o; o.reasoning_effort = THINK === 'off' ? 'minimal' : THINK; if (/glm|zai|kimi|moonshot/i.test(model)) o.thinking = { type: THINK === 'off' ? 'disabled' : 'enabled' }; if (/qwen/i.test(model)) o.enable_thinking = false; return o; };
 const NOEXTRAS = new Set(), LASTERR = {}; // models that failed with the --think settings (they are sent without them from then on) / the last error text per model
 const REQUEST_TIMEOUT_MS = (+args.timeout || 68) * 1000; // --timeout 60 to allow slower models
+// --max-rpm 12: never send more than that many requests a minute (for free tiers with a requests-per-minute cap). Calls queue up and go out evenly spaced, so parallel seats just wait their turn.
+const MAX_RPM = Math.max(0, +args['max-rpm'] || 0); let nextSlot = 0;
+const rateGate = async () => { if (!MAX_RPM) return; const now = Date.now(), at = Math.max(now, nextSlot); nextSlot = at + 60000 / MAX_RPM; if (at > now) await sleep(at - now); };
 // OpenAI-compatible cloud call (OpenRouter / Commonstack)
 async function llmRemote(model, system, user, { json, maxTokens, temp }, stats = {}) {
   const url = process.env.MAFIA_API_URL || PROVIDERS[PROVIDER].url;
@@ -495,6 +498,7 @@ async function llmRemote(model, system, user, { json, maxTokens, temp }, stats =
   const extras = THINK && PROVIDER !== 'openrouter' && !NOEXTRAS.has(model) ? thinkExtras(model) : {}; Object.assign(body, extras); // --think low
   const dropExtras = () => { let had = false; for (const k of Object.keys(extras)) if (k in body) { delete body[k]; had = true; } if (had) NOEXTRAS.add(model); return had; };
   for (let attempt = 0; attempt < 5; attempt++) {
+    await rateGate();
     try {
       const headers = { 'content-type': 'application/json', authorization: `Bearer ${API_KEY}` };
       if (PROVIDER === 'openrouter') headers['X-Title'] = 'AI Mafia';
