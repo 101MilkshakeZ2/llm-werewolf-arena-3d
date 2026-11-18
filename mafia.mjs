@@ -488,7 +488,7 @@ async function llmRemote(model, system, user, { json, maxTokens, temp }, stats =
   const merged = [{ role: 'user', content: `${system}\n\n${user}` }];
   const body = { model, temperature: temp, max_tokens: Math.max(maxTokens * 3, 150), messages: NO_SYSTEM.has(model) ? merged : [{ role: 'system', content: system }, { role: 'user', content: user }] };
   if (json) body.response_format = { type: 'json_object' };
-  if (PROVIDER === 'openrouter') { body.reasoning = { enabled: false }; body.usage = { include: true }; }
+  if (PROVIDER === 'openrouter') { body.reasoning = { enabled: false }; body.usage = { include: true }; if (/^(throughput|price|latency)$/.test(args['provider-sort'])) body.provider = { sort: args['provider-sort'], allow_fallbacks: true }; } // --provider-sort throughput: OpenRouter picks the fastest of a model's hosts
   const efforts = ['minimal', 'low']; // reasoning_effort values to try, in order
   if (/^~?openai\//.test(model)) body.reasoning_effort = efforts.shift();
   const extras = THINK && PROVIDER !== 'openrouter' && !NOEXTRAS.has(model) ? thinkExtras(model) : {}; Object.assign(body, extras); // --think low
@@ -1069,6 +1069,18 @@ if (args.check) { // --check: send one tiny request to every model in play and r
   }
   await sleep(400); // let open connections close first (avoids a harmless Node/Windows 'UV_HANDLE_CLOSING' crash message)
   process.exit(0);
+}
+// start-of-game health check: one tiny JSON request per model; a model that cannot answer at all is swapped for the fallback BEFORE the game, so it never takes a seat and then fails mid-game. --no-health skips it.
+if (PROVIDER && !MOCK && !args['no-health'] && FALLBACK) {
+  const dead = [], shaky = [];
+  await Promise.all([...new Set(players.filter(q => !q.human).map(q => q.model))].filter(m => m !== FALLBACK).map(async m => {
+    let out = null;
+    for (let i = 0; i < 2 && !out; i++) out = await llm(m, 'You answer with JSON only.', 'Reply ONLY with this JSON: {"ok":true}', { json: true, maxTokens: 12, temp: 0, noFailover: true });
+    if (!out) dead.push(m); else if (!pj(out)) shaky.push(m);
+  }));
+  for (const m of dead) { const ps = players.filter(q => q.model === m); ps.forEach(q => { q.model = FALLBACK; }); const t = `[Health check] ${m} did not answer, so ${ps.map(q => q.name).join(', ')} play on ${FALLBACK} this game (${LASTERR[m] || 'no answer / timeout'})`; console.log(C.yel(`  ⚠ ${t}`)); }
+  for (const m of shaky) console.log(C.yel(`  ⚠ [Health check] ${m} answers but not in valid JSON, so it may write empty memories`));
+  if (!dead.length && !shaky.length) console.log(C.dim('  (health check: every model answered)'));
 }
 console.log(C.bold(`AI MAFIA — ${N} players, ${mafiaCount} Mafia${MOCK ? ' (mock LLM)' : ''}`));
 console.log(`Models: ${[...new Set(players.filter(p => !p.human).map(p => p.model))].join(' | ')}`);

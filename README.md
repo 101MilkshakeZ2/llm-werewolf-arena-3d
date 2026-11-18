@@ -80,6 +80,8 @@ Set `COMMONSTACK_API_KEY` or `OPENROUTER_API_KEY` in your environment or in a `.
 --timeout 68                seconds per request
 --no-memory  --no-learn     turn off private notes / long-term lessons
 --scribe slug|none         model that writes a seat's lessons if its own model fails (default: the fallback model)
+--no-health               skip the start-of-game health check (by default each model gets one tiny request, and a dead one is swapped for the fallback before the game)
+--provider-sort throughput|price|latency   OpenRouter only: which of a model's hosts to prefer
 --no-postgame               skip the post-game discussion
 --tier full                 use the "full" Commonstack roster
 --web [--port 3000] [--spectate] [--no-open]
